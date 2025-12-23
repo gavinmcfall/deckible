@@ -80,13 +80,13 @@ install_tailscale: true
 Keep your personal settings in a separate private repository:
 
 ```bash
-./setup.sh git@github.com:YOUR_USERNAME/your-private-repo.git
+./setup.sh git@github.com:YOUR_USERNAME/steamdeck.git
 ```
 
 Your private repo overrides defaults:
 
 ```
-deckible-private/
+steamdeck/
 ├── group_vars/
 │   └── all.yml          # Your settings (overrides deckible defaults)
 └── files/
@@ -258,7 +258,7 @@ A private overlay repo lets you:
 
 **On GitHub:**
 1. Go to [github.com/new](https://github.com/new)
-2. Name it something like `deckible-private` or `steamdeck-config`
+2. Name it `steamdeck` (or any name you prefer)
 3. **Important**: Set visibility to **Private**
 4. Check "Add a README file"
 5. Click "Create repository"
@@ -267,8 +267,8 @@ A private overlay repo lets you:
 
 ```bash
 # Clone your new private repo
-git clone git@github.com:YOUR_USERNAME/deckible-private.git
-cd deckible-private
+git clone git@github.com:YOUR_USERNAME/steamdeck.git
+cd steamdeck
 
 # Create the required directory structure
 mkdir -p group_vars files/appimages files/flatpaks
@@ -333,7 +333,7 @@ On your Steam Deck (or wherever you run deckible):
 
 ```bash
 cd deckible
-./setup.sh git@github.com:YOUR_USERNAME/deckible-private.git
+./setup.sh git@github.com:YOUR_USERNAME/steamdeck.git
 ```
 
 This clones your private repo into `deckible/private/`.
@@ -343,7 +343,7 @@ This clones your private repo into `deckible/private/`.
 Your private repo should look like this:
 
 ```
-deckible-private/
+steamdeck/
 ├── README.md
 ├── group_vars/
 │   └── all.yml              # Your personal settings
@@ -380,7 +380,7 @@ Your private config works on any Steam Deck:
 # On a new/different Deck
 git clone https://github.com/gavinmcfall/deckible.git
 cd deckible
-./setup.sh git@github.com:YOUR_USERNAME/deckible-private.git
+./setup.sh git@github.com:YOUR_USERNAME/steamdeck.git
 ansible-playbook playbook.yml --ask-become-pass
 ```
 
