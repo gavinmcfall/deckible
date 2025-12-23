@@ -17,6 +17,23 @@ Everything survives SteamOS updates.
 
 ## Quick Start
 
+### Switch to Desktop Mode
+
+1. Press the **Steam** button
+2. Select **Power** → **Switch to Desktop**
+3. Wait for Desktop Mode to load
+
+> **Tip**: To use the on-screen keyboard, make sure Steam is running in Desktop Mode.
+> Press **Steam + X** to toggle the keyboard. If it doesn't work, launch Steam from
+> the application menu first.
+
+### Open a Terminal
+
+1. Click the application menu (bottom left corner)
+2. Search for "Konsole" or find it under **System** → **Konsole**
+
+### Run These Commands
+
 ```bash
 # 1. Set sudo password (if not already done)
 passwd
@@ -32,6 +49,9 @@ cd deckible
 ./setup.sh
 ansible-playbook playbook.yml --ask-become-pass
 ```
+
+> **Keyboard tip**: Use **Steam + X** to bring up the on-screen keyboard when
+> entering your password or typing commands.
 
 ## Configuration
 
