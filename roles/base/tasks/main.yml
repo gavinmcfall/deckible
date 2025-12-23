@@ -54,3 +54,106 @@
   ansible.builtin.command: flatpak update -y --noninteractive
   register: flatpak_update
   changed_when: "'Nothing to do' not in flatpak_update.stdout"
+
+# SD Card Detection
+# -----------------
+# Steam Deck mounts SD cards at /run/media/mmcblk0p1
+# We detect if one is present and set facts for other roles to use.
+
+- name: Check for SD card
+  ansible.builtin.stat:
+    path: /run/media/mmcblk0p1
+  register: sdcard_check
+
+- name: Check SD card is writable
+  ansible.builtin.file:
+    path: /run/media/mmcblk0p1/.deckible_test
+    state: touch
+    mode: '0644'
+  register: sdcard_write_test
+  when: sdcard_check.stat.exists
+  failed_when: false
+  changed_when: false
+
+- name: Clean up SD card test file
+  ansible.builtin.file:
+    path: /run/media/mmcblk0p1/.deckible_test
+    state: absent
+  when:
+    - sdcard_check.stat.exists
+    - sdcard_write_test is succeeded
+  changed_when: false
+
+- name: Set SD card facts
+  ansible.builtin.set_fact:
+    sdcard_present: "{{ sdcard_check.stat.exists }}"
+    sdcard_writable: "{{ sdcard_write_test is succeeded if sdcard_check.stat.exists else false }}"
+    sdcard_path: "{{ '/run/media/mmcblk0p1' if sdcard_check.stat.exists else '' }}"
+
+- name: Display SD card status
+  ansible.builtin.debug:
+    msg: |
+      SD Card: {{ 'Detected at ' + sdcard_path if sdcard_present else 'Not detected' }}
+      {{ 'Writable: Yes' if sdcard_writable else 'Writable: No' if sdcard_present else '' }}
+  when: sdcard_present
+
+# Shader Cache on SD Card
+# -----------------------
+# Steam's shader cache can grow to 10-50GB+, eating internal storage.
+# Moving it to SD card frees up space for games.
+# This creates a symlink from the internal location to SD card.
+
+- name: Check if shader cache move is requested
+  ansible.builtin.set_fact:
+    should_move_shader_cache: "{{ move_shader_cache | default(false) and sdcard_present and sdcard_writable }}"
+
+- name: Get current shader cache location
+  ansible.builtin.stat:
+    path: "{{ deck_home }}/.steam/steam/steamapps/shadercache"
+  register: shadercache_stat
+  when: should_move_shader_cache
+
+- name: Check if shader cache is already a symlink
+  ansible.builtin.set_fact:
+    shadercache_is_symlink: "{{ shadercache_stat.stat.islnk | default(false) }}"
+  when: should_move_shader_cache
+
+- name: Create shader cache directory on SD card
+  ansible.builtin.file:
+    path: "{{ sdcard_path }}/steamapps/shadercache"
+    state: directory
+    mode: '0755'
+  when:
+    - should_move_shader_cache
+    - not shadercache_is_symlink
+
+- name: Move existing shader cache to SD card
+  ansible.builtin.shell: |
+    if [ -d "{{ deck_home }}/.steam/steam/steamapps/shadercache" ] && [ ! -L "{{ deck_home }}/.steam/steam/steamapps/shadercache" ]; then
+      rsync -a --remove-source-files "{{ deck_home }}/.steam/steam/steamapps/shadercache/" "{{ sdcard_path }}/steamapps/shadercache/"
+      rm -rf "{{ deck_home }}/.steam/steam/steamapps/shadercache"
+    fi
+  when:
+    - should_move_shader_cache
+    - not shadercache_is_symlink
+    - shadercache_stat.stat.exists | default(false)
+  changed_when: true
+
+- name: Create symlink for shader cache
+  ansible.builtin.file:
+    src: "{{ sdcard_path }}/steamapps/shadercache"
+    dest: "{{ deck_home }}/.steam/steam/steamapps/shadercache"
+    state: link
+    force: true
+  when:
+    - should_move_shader_cache
+    - not shadercache_is_symlink
+
+- name: Display shader cache status
+  ansible.builtin.debug:
+    msg: |
+      Shader cache moved to SD card: {{ sdcard_path }}/steamapps/shadercache
+      Internal storage freed!
+  when:
+    - should_move_shader_cache
+    - not shadercache_is_symlink

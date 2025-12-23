@@ -274,6 +274,24 @@ install_protontricks: true
 install_emudeck: false
 
 # =============================================================================
+# SD CARD
+# =============================================================================
+# Steam Deck SD card configuration. The playbook auto-detects if an SD card
+# is present - these settings control what gets stored on it.
+
+# Where to install emulation files (ROMs, BIOS, saves)
+# Options: "auto", "internal", "sdcard"
+#   - auto: Use SD card if present, otherwise internal
+#   - internal: Always use internal storage (~/)
+#   - sdcard: Always use SD card (fails if not present)
+emulation_storage: "auto"
+
+# Move Steam shader cache to SD card
+# Shader cache can use 10-50GB+ on internal storage
+# Moving it to SD card frees up space for games
+move_shader_cache: false
+
+# =============================================================================
 # PATHS
 # =============================================================================
 # Generally don't need to change these
@@ -281,5 +299,13 @@ install_emudeck: false
 # Home directory
 deck_home: "/home/deck"
 
-# Emulation base path
-emulation_path: "{{ deck_home }}/Emulation"
+# Emulation base path (computed based on storage preference)
+# Don't edit this directly - set emulation_storage above instead
+emulation_path: >-
+  {%- if emulation_storage == 'sdcard' -%}
+    {{ sdcard_path | default('/run/media/mmcblk0p1') }}/Emulation
+  {%- elif emulation_storage == 'auto' and (sdcard_present | default(false)) -%}
+    {{ sdcard_path | default('/run/media/mmcblk0p1') }}/Emulation
+  {%- else -%}
+    {{ deck_home }}/Emulation
+  {%- endif -%}

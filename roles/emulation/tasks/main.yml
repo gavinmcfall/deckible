@@ -68,6 +68,42 @@
 # | RetroArch menu| L3 + R3            |
 
 ---
+# Determine actual emulation path based on SD card availability
+- name: Set emulation storage location
+  ansible.builtin.set_fact:
+    actual_emulation_path: >-
+      {%- if emulation_storage == 'sdcard' -%}
+        {{ sdcard_path | default('/run/media/mmcblk0p1') }}/Emulation
+      {%- elif emulation_storage == 'auto' and (sdcard_present | default(false)) -%}
+        {{ sdcard_path | default('/run/media/mmcblk0p1') }}/Emulation
+      {%- else -%}
+        {{ deck_home }}/Emulation
+      {%- endif -%}
+
+- name: Fail if SD card required but not present
+  ansible.builtin.fail:
+    msg: "emulation_storage is set to 'sdcard' but no SD card was detected"
+  when:
+    - emulation_storage == 'sdcard'
+    - not (sdcard_present | default(false))
+
+- name: Display emulation storage location
+  ansible.builtin.debug:
+    msg: |
+      Emulation storage: {{ 'SD Card' if sdcard_path | default('') in actual_emulation_path else 'Internal' }}
+      Path: {{ actual_emulation_path }}
+
+- name: Create emulation directory structure
+  ansible.builtin.file:
+    path: "{{ actual_emulation_path }}/{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - roms
+    - bios
+    - saves
+    - states
+
 - name: Ensure Applications directory exists
   ansible.builtin.file:
     path: "{{ deck_home }}/Applications"
@@ -186,18 +222,20 @@
     msg: |
       EmuDeck {{ '(Patreon/EA version)' if has_local_emudeck else '(public version)' }} ready!
 
+      Emulation folder created at: {{ actual_emulation_path }}
+
       To complete setup:
       1. Switch to Desktop Mode
       2. Double-click EmuDeck on your Desktop
       3. Follow the setup wizard
          - Easy Mode: Recommended for first-time setup
          - Custom Mode: Choose specific emulators and options
-      4. Choose installation location (SD card recommended)
+      4. Choose installation location: {{ 'SD Card' if sdcard_path | default('') in actual_emulation_path else 'Internal Storage' }}
       5. Wait for emulators to download and configure
 
       After EmuDeck setup:
-      1. Copy ROMs to ~/Emulation/roms/<system>/
-      2. Add BIOS files to ~/Emulation/bios/ (for PS1, PS2, etc.)
+      1. Copy ROMs to {{ actual_emulation_path }}/roms/<system>/
+      2. Add BIOS files to {{ actual_emulation_path }}/bios/
       3. Open Steam ROM Manager (in EmuDeck tools)
       4. Click Preview, then Save to Steam
       5. Restart Steam to see your games!
