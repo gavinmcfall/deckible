@@ -227,35 +227,143 @@ deckible/
 
 ## Creating a Private Overlay Repo
 
-1. Create a new **private** repository (e.g., `deckible-private`)
+A private overlay repo lets you:
+- Keep your personal settings separate from deckible
+- Store private files (Patreon downloads, etc.) securely
+- Update deckible without losing your customizations
+- Sync your config across multiple Steam Decks
 
-2. Create this structure:
-   ```
-   deckible-private/
-   ├── group_vars/
-   │   └── all.yml
-   └── files/
-       ├── appimages/
-       │   └── .gitkeep
-       └── flatpaks/
-           └── .gitkeep
-   ```
+### Step 1: Create the Repository
 
-3. Copy and customize settings:
-   ```bash
-   cp deckible/group_vars/all.yml deckible-private/group_vars/all.yml
-   # Edit to your preferences
-   ```
+**On GitHub:**
+1. Go to [github.com/new](https://github.com/new)
+2. Name it something like `deckible-private` or `steamdeck-config`
+3. **Important**: Set visibility to **Private**
+4. Check "Add a README file"
+5. Click "Create repository"
 
-4. Add private files (Patreon EmuDeck, etc.) to `files/appimages/`
+### Step 2: Clone and Set Up Structure
 
-5. Push to your private repo
+```bash
+# Clone your new private repo
+git clone git@github.com:YOUR_USERNAME/deckible-private.git
+cd deckible-private
 
-6. Link to deckible:
-   ```bash
-   cd deckible
-   ./setup.sh git@github.com:YOUR_USERNAME/your-private-repo.git
-   ```
+# Create the required directory structure
+mkdir -p group_vars files/appimages files/flatpaks
+
+# Create .gitkeep files to track empty directories
+touch files/appimages/.gitkeep files/flatpaks/.gitkeep
+```
+
+### Step 3: Create Your Configuration
+
+Copy the default config and customize it:
+
+```bash
+# If you have deckible cloned already:
+cp ../deckible/group_vars/all.yml group_vars/all.yml
+
+# Or download it directly:
+curl -o group_vars/all.yml https://raw.githubusercontent.com/gavinmcfall/deckible/main/group_vars/all.yml
+```
+
+Edit `group_vars/all.yml` to enable what you want:
+
+```yaml
+# Example customizations
+install_discord: true
+install_spotify: true
+install_plex: true
+
+install_ssh: true
+install_tailscale: true
+
+install_decky: true
+install_emudeck: true
+
+password_manager: "1password"
+password_manager_install_method: "distrobox"
+```
+
+### Step 4: Add Private Files (Optional)
+
+If you have Patreon/early access files:
+
+```bash
+# EmuDeck Early Access
+cp ~/Downloads/EmuDeck\ EA\ SteamOS.desktop.download files/appimages/
+
+# Any local .flatpak files
+cp ~/Downloads/SomeApp.flatpak files/flatpaks/
+```
+
+### Step 5: Commit and Push
+
+```bash
+git add -A
+git commit -m "Initial deckible private config"
+git push
+```
+
+### Step 6: Link to Deckible
+
+On your Steam Deck (or wherever you run deckible):
+
+```bash
+cd deckible
+./setup.sh git@github.com:YOUR_USERNAME/deckible-private.git
+```
+
+This clones your private repo into `deckible/private/`.
+
+### Final Structure
+
+Your private repo should look like this:
+
+```
+deckible-private/
+├── README.md
+├── group_vars/
+│   └── all.yml              # Your personal settings
+└── files/
+    ├── appimages/
+    │   ├── .gitkeep
+    │   └── EmuDeck EA SteamOS.desktop.download  # Optional
+    └── flatpaks/
+        └── .gitkeep
+```
+
+### Updating Your Config
+
+After making changes to your private repo:
+
+```bash
+# In your private repo
+git add -A && git commit -m "Update config" && git push
+
+# On your Steam Deck, pull the changes
+cd deckible/private
+git pull
+
+# Re-run the playbook
+cd ..
+ansible-playbook playbook.yml --ask-become-pass
+```
+
+### Multiple Steam Decks
+
+Your private config works on any Steam Deck:
+
+```bash
+# On a new/different Deck
+git clone https://github.com/gavinmcfall/deckible.git
+cd deckible
+./setup.sh git@github.com:YOUR_USERNAME/deckible-private.git
+ansible-playbook playbook.yml --ask-become-pass
+```
+
+Same config, same apps, every time.
 
 ## Troubleshooting
 
