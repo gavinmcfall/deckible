@@ -27,7 +27,7 @@ sudo pacman -S ansible
 sudo steamos-readonly enable
 
 # 3. Clone and run
-git clone https://github.com/yourusername/deckible.git
+git clone https://github.com/gavinmcfall/deckible.git
 cd deckible
 ./setup.sh
 ansible-playbook playbook.yml --ask-become-pass
@@ -59,7 +59,7 @@ install_tailscale: true
 Keep your personal settings in a separate private repository:
 
 ```bash
-./setup.sh git@github.com:yourusername/deckible-private.git
+./setup.sh git@github.com:YOUR_USERNAME/your-private-repo.git
 ```
 
 Your private repo overrides defaults:
@@ -195,7 +195,7 @@ After a Steam Deck factory reset:
    ```bash
    passwd  # Set sudo password
    sudo steamos-readonly disable && sudo pacman -S ansible && sudo steamos-readonly enable
-   git clone https://github.com/yourusername/deckible.git
+   git clone https://github.com/gavinmcfall/deckible.git
    cd deckible
    ./setup.sh  # Optionally link private repo
    ansible-playbook playbook.yml --ask-become-pass
@@ -254,7 +254,7 @@ deckible/
 6. Link to deckible:
    ```bash
    cd deckible
-   ./setup.sh git@github.com:yourusername/deckible-private.git
+   ./setup.sh git@github.com:YOUR_USERNAME/your-private-repo.git
    ```
 
 ## Troubleshooting
