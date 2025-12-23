@@ -1,0 +1,359 @@
+# Flatpak Apps Role - Desktop Applications
+# =========================================
+# Installs common desktop applications via Flatpak.
+# Configure which apps to install in group_vars/all.yml
+#
+# Why Flatpak?
+# - Apps survive SteamOS updates
+# - Sandboxed for security
+# - Easy to manage permissions with Flatseal
+#
+# Tips:
+# - Use Flatseal to grant additional permissions if an app can't
+#   access files or devices
+# - Apps appear in the Application Menu in Desktop Mode
+# - Can also launch from Gaming Mode via "Add Non-Steam Game"
+
+---
+# Communication Apps
+# ------------------
+
+- name: Install Discord
+  community.general.flatpak:
+    name: com.discordapp.Discord
+    state: present
+  when: install_discord | default(false)
+
+- name: Install Signal
+  community.general.flatpak:
+    name: org.signal.Signal
+    state: present
+  when: install_signal | default(false)
+
+# Media Apps
+# ----------
+
+- name: Install Spotify
+  community.general.flatpak:
+    name: com.spotify.Client
+    state: present
+  when: install_spotify | default(false)
+
+- name: Install VLC
+  community.general.flatpak:
+    name: org.videolan.VLC
+    state: present
+  when: install_vlc | default(false)
+
+# Browsers
+# --------
+# Firefox is pre-installed on SteamOS but may need reinstall after updates
+
+- name: Install Firefox
+  community.general.flatpak:
+    name: org.mozilla.firefox
+    state: present
+  when: install_firefox | default(false)
+
+- name: Install Chromium
+  community.general.flatpak:
+    name: org.chromium.Chromium
+    state: present
+  when: install_chromium | default(false)
+
+# Productivity
+# ------------
+
+- name: Install OBS Studio
+  community.general.flatpak:
+    name: com.obsproject.Studio
+    state: present
+  when: install_obs | default(false)
+
+- name: Install VS Code
+  community.general.flatpak:
+    name: com.visualstudio.code
+    state: present
+  when: install_vscode | default(false)
+
+# Utilities
+# ---------
+
+- name: Install Flatseal (Flatpak permission manager)
+  community.general.flatpak:
+    name: com.github.tchx84.Flatseal
+    state: present
+  when: install_flatseal | default(true)
+  # Flatseal is highly recommended - lets you grant filesystem/device
+  # access to sandboxed apps that need it.
+  # Common fixes:
+  # - App can't see files? Grant filesystem access
+  # - App can't use controller? Enable device access
+
+# Password Managers (Flatpak)
+# ---------------------------
+# These are installed when password_manager_install_method is "flatpak"
+# Note: Flatpak versions have limited features (no system auth, no SSH agent)
+
+- name: Install 1Password (Flatpak)
+  community.general.flatpak:
+    name: https://downloads.1password.com/linux/flatpak/1Password.flatpakref
+    state: present
+  when:
+    - password_manager | default('none') == '1password'
+    - password_manager_install_method | default('flatpak') == 'flatpak'
+  # Flatpak limitations: no system auth, no SSH agent, browser locks separately
+
+- name: Install Bitwarden (Flatpak)
+  community.general.flatpak:
+    name: com.bitwarden.desktop
+    state: present
+  when:
+    - password_manager | default('none') == 'bitwarden'
+    - password_manager_install_method | default('flatpak') == 'flatpak'
+
+- name: Install KeePassXC (Flatpak)
+  community.general.flatpak:
+    name: org.keepassxc.KeePassXC
+    state: present
+  when:
+    - password_manager | default('none') == 'keepassxc'
+    - password_manager_install_method | default('flatpak') == 'flatpak'
+
+- name: Install Proton Pass (Flatpak)
+  community.general.flatpak:
+    name: me.proton.Pass
+    state: present
+  when:
+    - password_manager | default('none') == 'protonpass'
+    - password_manager_install_method | default('flatpak') == 'flatpak'
+
+# Remote Access
+# -------------
+
+- name: Install AnyDesk
+  community.general.flatpak:
+    name: com.anydesk.Anydesk
+    state: present
+  when: install_anydesk | default(false)
+  # Remote desktop access - connect to/from other computers
+  # Note: Community package, not officially supported by AnyDesk
+
+# Gaming Utilities
+# ----------------
+
+- name: Install Chiaki4deck (PlayStation Remote Play)
+  community.general.flatpak:
+    name: io.github.streetpea.Chiaki4deck
+    state: present
+  when: install_chiaki | default(false)
+  # Stream games from your PlayStation 4/5 to your Steam Deck
+  # Setup: Your Deck and PlayStation must be on the same network
+  # Features: HDR support, resume from sleep, optimized for Deck
+  # After install, pair with your PlayStation via the app
+
+# Game Streaming Clients
+# ----------------------
+
+- name: Install Moonlight (Game Streaming Client)
+  community.general.flatpak:
+    name: com.moonlight_stream.Moonlight
+    state: present
+  when: install_moonlight | default(false)
+  # Stream games FROM another PC running Sunshine or NVIDIA GeForce Experience
+  # Pair with Sunshine on your gaming PC for low-latency streaming
+  # Works great over Tailscale for remote play
+
+- name: Install Greenlight (Xbox Streaming)
+  community.general.flatpak:
+    name: io.github.unknownskl.greenlight
+    state: present
+  when: install_greenlight | default(false)
+  # Stream games from Xbox console or Xbox Cloud Gaming (xCloud)
+  # Requires Xbox Game Pass Ultimate for cloud streaming
+  # For console streaming, Xbox and Deck must be on same network
+
+# Media Streaming
+# ---------------
+
+- name: Install Plex
+  community.general.flatpak:
+    name: tv.plex.PlexDesktop
+    state: present
+  when: install_plex | default(false)
+  # Plex media player for streaming from your Plex server
+
+- name: Install Jellyfin
+  community.general.flatpak:
+    name: com.github.iwalton3.jellyfin-media-player
+    state: present
+  when: install_jellyfin | default(false)
+  # Open source alternative to Plex
+
+# Communication (Additional)
+# --------------------------
+
+- name: Install Telegram
+  community.general.flatpak:
+    name: org.telegram.desktop
+    state: present
+  when: install_telegram | default(false)
+
+- name: Install Slack
+  community.general.flatpak:
+    name: com.slack.Slack
+    state: present
+  when: install_slack | default(false)
+
+- name: Install Element (Matrix)
+  community.general.flatpak:
+    name: im.riot.Riot
+    state: present
+  when: install_element | default(false)
+  # Matrix/Element encrypted messaging client
+
+- name: Install Zoom
+  community.general.flatpak:
+    name: us.zoom.Zoom
+    state: present
+  when: install_zoom | default(false)
+
+# Productivity (Additional)
+# -------------------------
+
+- name: Install LibreOffice
+  community.general.flatpak:
+    name: org.libreoffice.LibreOffice
+    state: present
+  when: install_libreoffice | default(false)
+  # Full office suite - documents, spreadsheets, presentations
+
+- name: Install GIMP
+  community.general.flatpak:
+    name: org.gimp.GIMP
+    state: present
+  when: install_gimp | default(false)
+  # Image editor
+
+- name: Install Thunderbird
+  community.general.flatpak:
+    name: org.mozilla.Thunderbird
+    state: present
+  when: install_thunderbird | default(false)
+  # Email client
+
+# Utilities (Additional)
+# ----------------------
+
+- name: Install Syncthing
+  community.general.flatpak:
+    name: com.github.zocker_160.SyncThingy
+    state: present
+  when: install_syncthing | default(false)
+  # Continuous file synchronization between devices
+  # Great for syncing saves, configs, or files between Deck and PC
+
+- name: Install qBittorrent
+  community.general.flatpak:
+    name: org.qbittorrent.qBittorrent
+    state: present
+  when: install_qbittorrent | default(false)
+
+- name: Install FileZilla
+  community.general.flatpak:
+    name: org.filezillaproject.Filezilla
+    state: present
+  when: install_filezilla | default(false)
+  # FTP/SFTP client
+
+# Gaming Launchers
+# ----------------
+
+- name: Install Heroic Games Launcher
+  community.general.flatpak:
+    name: com.heroicgameslauncher.hgl
+    state: present
+  when: install_heroic | default(false)
+  # Play Epic Games Store and GOG games
+  # Supports cloud saves and automatic Proton configuration
+
+- name: Install Lutris
+  community.general.flatpak:
+    name: net.lutris.Lutris
+    state: present
+  when: install_lutris | default(false)
+  # Game launcher for non-Steam games
+  # Includes install scripts for many games and platforms
+
+- name: Install Bottles
+  community.general.flatpak:
+    name: com.usebottles.bottles
+    state: present
+  when: install_bottles | default(false)
+  # Wine prefix manager for running Windows software
+  # More user-friendly than raw Wine
+
+# Development
+# -----------
+
+- name: Install Neovim
+  community.general.flatpak:
+    name: io.neovim.nvim
+    state: present
+  when: install_neovim | default(false)
+  # Modern Vim-based text editor
+
+# CryoUtilities
+# -------------
+# Not a Flatpak - installed via shell script
+
+- name: Download CryoUtilities installer
+  ansible.builtin.get_url:
+    url: https://raw.githubusercontent.com/CryoByte33/steam-deck-utilities/main/InstallCryoUtilities.desktop
+    dest: "{{ deck_home }}/Desktop/InstallCryoUtilities.desktop"
+    mode: '0755'
+  when: install_cryoutilities | default(false)
+  # CryoUtilities provides performance tweaks and storage management.
+  #
+  # NOTE (2025): Some features (swap/memory tweaks) may not work well
+  # with recent SteamOS versions. The main useful feature now is
+  # moving shader cache to SD card.
+  #
+  # To install: Double-click InstallCryoUtilities.desktop on your Desktop
+  # To revert: Run CryoUtilities and click "Stock" or uninstall
+
+# ============================================================================
+# Local Flatpak Files
+# ============================================================================
+# Install any .flatpak files placed in private/files/flatpaks/ or files/flatpaks/
+# Useful for Patreon versions or builds not on Flathub.
+
+- name: Find flatpak files in private overlay
+  ansible.builtin.find:
+    paths: "{{ playbook_dir }}/private/files/flatpaks"
+    patterns: "*.flatpak"
+  register: private_flatpaks
+  delegate_to: localhost
+  failed_when: false
+
+- name: Find flatpak files in local files
+  ansible.builtin.find:
+    paths: "{{ playbook_dir }}/files/flatpaks"
+    patterns: "*.flatpak"
+  register: local_flatpaks_fallback
+  delegate_to: localhost
+
+- name: Combine flatpak file lists
+  ansible.builtin.set_fact:
+    all_local_flatpaks: "{{ (private_flatpaks.files | default([])) + (local_flatpaks_fallback.files | default([])) }}"
+
+- name: Install local flatpak files
+  ansible.builtin.command:
+    cmd: "flatpak install --user -y {{ item.path }}"
+  loop: "{{ all_local_flatpaks }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  when: all_local_flatpaks | length > 0
+  register: flatpak_install_result
+  changed_when: "'already installed' not in flatpak_install_result.stdout | default('')"
+  failed_when: false

@@ -1,0 +1,285 @@
+# Deckible Configuration
+# ======================
+# Default settings for Steam Deck setup.
+#
+# To customize: Create a private overlay repo and override these values
+# in private/group_vars/all.yml. See README.md for details.
+#
+# Or edit this file directly if you've forked the repo.
+
+---
+# =============================================================================
+# DESKTOP APPLICATIONS (Flatpak)
+# =============================================================================
+# Apps installed via Flatpak from Flathub. These survive SteamOS updates.
+
+install_flatpak_apps: true
+
+# Communication
+install_discord: false
+install_signal: false
+
+# Media
+install_spotify: false
+install_vlc: false
+
+# Browsers
+install_firefox: false      # Pre-installed on SteamOS, but Flatpak version is more up-to-date
+install_chromium: false
+
+# Productivity
+install_obs: false
+install_vscode: false
+
+# Utilities
+install_flatseal: true      # Manage Flatpak permissions - highly recommended
+
+# Password Manager
+# ----------------
+# Choose your password manager and installation method.
+#
+# Options for password_manager:
+#   - "1password"  : 1Password (paid)
+#   - "bitwarden"  : Bitwarden (free/paid)
+#   - "keepassxc"  : KeePassXC (free, local-only)
+#   - "protonpass" : Proton Pass (free/paid)
+#   - "none"       : Don't install a password manager
+#
+# Options for password_manager_install_method:
+#   - "flatpak"    : Easier, but limited features (no system auth, no SSH agent)
+#   - "distrobox"  : Full features via Arch container (recommended for 1Password)
+#
+password_manager: "none"
+password_manager_install_method: "flatpak"
+
+# Remote Access Apps
+install_anydesk: false
+
+# Gaming Utilities
+install_chiaki: false       # PlayStation Remote Play (Chiaki4deck)
+install_cryoutilities: false  # Performance tweaks
+
+# Game Streaming Clients
+install_moonlight: false    # Stream games FROM another PC running Sunshine/GeForce
+install_greenlight: false   # Xbox/xCloud game streaming
+
+# Media Streaming
+install_plex: false
+install_jellyfin: false
+
+# Communication (Additional)
+install_telegram: false
+install_slack: false
+install_element: false
+install_zoom: false
+
+# Productivity (Additional)
+install_libreoffice: false
+install_gimp: false
+install_thunderbird: false
+
+# Utilities (Additional)
+install_syncthing: false
+install_qbittorrent: false
+install_filezilla: false
+
+# Gaming Launchers
+install_heroic: false       # Epic Games / GOG launcher
+install_lutris: false       # Game launcher for non-Steam games
+install_bottles: false      # Wine prefix manager
+
+# Development
+install_neovim: false
+
+# =============================================================================
+# REMOTE ACCESS
+# =============================================================================
+
+# SSH Server
+# ----------
+# Enables remote terminal access to your Deck.
+# Connect with: ssh deck@<your-deck-ip>
+install_ssh: false
+ssh_port: 22
+
+# Tailscale VPN
+# -------------
+# Zero-config VPN for secure access from anywhere.
+# Free for personal use. Requires Tailscale account.
+install_tailscale: false
+
+# Remote Desktop / Game Streaming
+# --------------------------------
+# Sunshine: Game streaming server (pair with Moonlight client)
+install_remote_desktop: false
+install_sunshine: false
+install_vnc: false
+
+# =============================================================================
+# GAMING ENHANCEMENTS
+# =============================================================================
+
+# Decky Loader
+# ------------
+# Plugin framework for Gaming Mode.
+install_decky: true
+
+# Decky Plugins
+# -------------
+# Plugins are installed from their GitHub/GitLab releases.
+# Set enabled: true/false to control which plugins get installed.
+decky_plugins:
+  # Performance & System
+  powertools:
+    enabled: true
+    description: "CPU/GPU control, per-game profiles"
+    repo: "https://gitlab.com/NGnius/PowerTools"
+    repo_type: "gitlab"
+
+  autosuspend:
+    enabled: false
+    description: "Auto-suspend after inactivity"
+    repo: "https://github.com/jurassicplayer/decky-autosuspend"
+    repo_type: "github"
+
+  battery_tracker:
+    enabled: false
+    description: "Track battery health over time"
+    repo: "https://github.com/safijari/steam-deck-battery-tracker"
+    repo_type: "github"
+
+  # Game Info & Store
+  protondb_badges:
+    enabled: true
+    description: "Show ProtonDB compatibility ratings"
+    repo: "https://github.com/OMGDuke/protondb-decky"
+    repo_type: "github"
+
+  steamgriddb:
+    enabled: true
+    description: "Custom game artwork"
+    repo: "https://github.com/SteamGridDB/decky-steamgriddb"
+    repo_type: "github"
+
+  hltb:
+    enabled: false
+    description: "How Long to Beat game times"
+    repo: "https://github.com/morwy/hltb-for-deck"
+    repo_type: "github"
+
+  playtime:
+    enabled: false
+    description: "Detailed play time tracking"
+    repo: "https://github.com/0u73r-h34v3n/SDH-PlayTime"
+    repo_type: "github"
+
+  isthereanydeal:
+    enabled: false
+    description: "Game deal notifications"
+    repo: "https://github.com/JtdeGraaf/IsThereAnyDeal-DeckyPlugin"
+    repo_type: "github"
+
+  # Customization
+  css_loader:
+    enabled: false
+    description: "Custom themes for Gaming Mode"
+    repo: "https://github.com/DeckThemes/SDH-CssLoader"
+    repo_type: "github"
+
+  animation_changer:
+    enabled: false
+    description: "Custom boot/suspend animations"
+    repo: "https://github.com/TheLogicMaster/SDH-AnimationChanger"
+    repo_type: "github"
+
+  # Connectivity
+  bluetooth:
+    enabled: false
+    description: "Better Bluetooth management"
+    repo: "https://github.com/Outpox/Bluetooth"
+    repo_type: "github"
+
+  bt_wake_control:
+    enabled: false
+    description: "Bluetooth wake control"
+    repo: "https://gitlab.com/finewolf-projects/decky-plugin-bluetooth-wake-control"
+    repo_type: "gitlab"
+
+  tailscale_control:
+    enabled: false
+    description: "Tailscale VPN control from Gaming Mode"
+    repo: "https://github.com/saumya-banthia/tailscale-control"
+    repo_type: "github"
+
+  kde_connect:
+    enabled: false
+    description: "KDE Connect integration"
+    repo: "https://github.com/safijari/Decky-KDE-Connect"
+    repo_type: "github"
+
+  # Sync & Transfer
+  decky_cloud_save:
+    enabled: false
+    description: "Cloud save sync for non-Steam games"
+    repo: "https://github.com/GedasFX/decky-cloud-save"
+    repo_type: "github"
+
+  deckmtp:
+    enabled: false
+    description: "MTP file transfer support"
+    repo: "https://github.com/dafta/DeckMTP"
+    repo_type: "github"
+
+  autoflatpaks:
+    enabled: false
+    description: "Auto-update Flatpak apps"
+    repo: "https://github.com/jurassicplayer/decky-autoflatpaks"
+    repo_type: "github"
+
+  # Social & Notifications
+  discord_status:
+    enabled: false
+    description: "Show game status on Discord"
+    repo: "https://github.com/andrewburgess/steamdeck-discord-status"
+    repo_type: "github"
+
+  decky_notifications:
+    enabled: false
+    description: "Desktop notifications in Gaming Mode"
+    repo: "https://github.com/Firemoon777/decky-notifications"
+    repo_type: "github"
+
+  # Audio
+  magicpods:
+    enabled: false
+    description: "AirPods battery level & controls"
+    repo: "https://github.com/steam3d/MagicPodsDecky"
+    repo_type: "github"
+
+# Proton Tools
+# ------------
+# Tools for Windows game compatibility.
+install_proton_tools: true
+install_protonup_qt: true
+install_proton_ge: true
+install_protontricks: true
+
+# =============================================================================
+# EMULATION
+# =============================================================================
+# Downloads EmuDeck for emulation setup.
+# EmuDeck requires a GUI wizard - after running this playbook, launch
+# EmuDeck from Desktop Mode to complete setup.
+
+install_emudeck: false
+
+# =============================================================================
+# PATHS
+# =============================================================================
+# Generally don't need to change these
+
+# Home directory
+deck_home: "/home/deck"
+
+# Emulation base path
+emulation_path: "{{ deck_home }}/Emulation"

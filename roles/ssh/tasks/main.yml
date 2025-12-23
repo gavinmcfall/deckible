@@ -1,0 +1,78 @@
+# SSH Role - Remote Terminal Access
+# ==================================
+# Enables SSH server for remote access to your Steam Deck.
+#
+# After this role runs, connect from another computer:
+#   ssh deck@<your-deck-ip>
+#
+# Finding your IP address:
+#   Gaming Mode: Settings > Internet > (your connection) > IP Address
+#   Desktop Mode: System Settings > Network > (your connection)
+#   Terminal: ip addr show | grep "inet "
+#
+# Security Recommendations:
+# -------------------------
+# 1. Use a strong sudo password (you set this with `passwd`)
+# 2. Consider SSH keys instead of password auth:
+#    - On your PC: ssh-keygen (if you don't have a key)
+#    - Copy to Deck: ssh-copy-id deck@<deck-ip>
+#    - Then disable password auth in sshd_config
+# 3. If exposing to internet, use Tailscale instead of port forwarding
+#
+# Useful SSH Commands:
+# --------------------
+#   ssh deck@<ip>                    # Connect
+#   scp file.txt deck@<ip>:/home/deck/  # Copy file to Deck
+#   ssh deck@<ip> 'flatpak list'     # Run command remotely
+
+---
+- name: Enable SSH service
+  become: true
+  ansible.builtin.systemd:
+    name: sshd
+    enabled: true
+    state: started
+
+- name: Ensure SSH service starts on boot
+  become: true
+  ansible.builtin.systemd:
+    name: sshd
+    enabled: true
+
+# Configure custom SSH port if specified
+- name: Configure SSH port
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?Port '
+    line: "Port {{ ssh_port }}"
+    state: present
+  when: ssh_port | default(22) != 22
+  notify: Restart SSH
+
+# Handler for restarting SSH (defined inline since we don't have handlers dir)
+- name: Restart SSH if port changed
+  become: true
+  ansible.builtin.systemd:
+    name: sshd
+    state: restarted
+  when: ssh_port | default(22) != 22
+  changed_when: false
+
+# SSH survives SteamOS updates but the enabled state might reset.
+# Running this playbook after an update will re-enable it.
+
+- name: Display SSH connection info
+  ansible.builtin.debug:
+    msg: |
+      SSH is now enabled!
+
+      Connect with: ssh deck@<your-deck-ip>{{ ' -p ' + (ssh_port | string) if ssh_port | default(22) != 22 else '' }}
+      Password: Your sudo password
+      {% if ssh_port | default(22) != 22 %}
+      Custom port: {{ ssh_port }}
+      {% endif %}
+
+      To find your IP:
+        Gaming Mode: Settings > Internet > IP Address
+        Desktop: ip addr show

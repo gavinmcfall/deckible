@@ -1,0 +1,80 @@
+# Remote Desktop Role - Game Streaming
+# =====================================
+# Sets up Sunshine for game streaming to other devices via Moonlight.
+#
+# Options Overview:
+# -----------------
+# | Method              | Best For                    | Latency |
+# |---------------------|-----------------------------|---------|
+# | Steam Link          | Same network (built-in)     | Low     |
+# | Sunshine + Moonlight| Anywhere, low latency       | Low     |
+# | VNC                 | Desktop control (not gaming)| Medium  |
+#
+# Sunshine + Moonlight (Recommended for Gaming):
+# ----------------------------------------------
+# Sunshine runs on your Deck and streams to Moonlight clients.
+# Moonlight is available for: Windows, macOS, Linux, iOS, Android, TV
+#
+# Setup Steps:
+# 1. This role installs Sunshine
+# 2. Launch Sunshine from Desktop Mode
+# 3. Open https://localhost:47990 in browser
+# 4. Set username/password
+# 5. Install Moonlight on your client device (moonlight-stream.org)
+# 6. Pair with the PIN shown in Sunshine
+#
+# Remote Streaming (over internet):
+# ---------------------------------
+# Use Tailscale to connect securely:
+# 1. Install Tailscale on both Deck and client
+# 2. Add your Deck's Tailscale IP in Moonlight
+# 3. Stream from anywhere!
+#
+# Performance Tips:
+# -----------------
+# - Use 5GHz Wi-Fi or wired ethernet (via dock)
+# - For remote: lower resolution/bitrate for bad connections
+# - Try H.265 encoding if your client supports it
+#
+# Bitrate Guide:
+# | Connection      | Recommended |
+# |-----------------|-------------|
+# | Local 5GHz      | 50-100 Mbps |
+# | Local Ethernet  | 100-150 Mbps|
+# | Remote (fast)   | 20-50 Mbps  |
+# | Remote (slow)   | 5-15 Mbps   |
+
+---
+- name: Install Sunshine (game streaming server)
+  community.general.flatpak:
+    name: dev.lizardbyte.app.Sunshine
+    state: present
+  when: install_sunshine | default(true)
+  # Sunshine is the server that runs on your Deck.
+  # Pair it with Moonlight on your phone/tablet/PC.
+
+- name: Install TigerVNC (for desktop control)
+  community.general.flatpak:
+    name: org.tigervnc.vncviewer
+    state: present
+  when: install_vnc | default(false)
+  # VNC is for desktop control, not optimized for gaming.
+  # Use Sunshine/Moonlight for game streaming instead.
+
+- name: Display Sunshine setup instructions
+  ansible.builtin.debug:
+    msg: |
+      Sunshine installed!
+
+      Setup steps:
+      1. Launch Sunshine from Desktop Mode
+      2. Open https://localhost:47990 in Firefox
+      3. Create a username and password
+      4. On your client device, install Moonlight from moonlight-stream.org
+      5. Add your Deck's IP address in Moonlight
+      6. Pair using the PIN shown in Sunshine
+
+      For remote streaming, use Tailscale:
+      - Install Tailscale on both devices
+      - Use your Deck's Tailscale IP (100.x.x.x) in Moonlight
+  when: install_sunshine | default(true)

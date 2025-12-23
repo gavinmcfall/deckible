@@ -1,0 +1,10 @@
+# Steam Deck Ansible Inventory
+# ----------------------------
+# This playbook runs locally on the Steam Deck itself.
+# No remote hosts needed.
+
+all:
+  hosts:
+    localhost:
+      ansible_connection: local
+      ansible_python_interpreter: /usr/bin/python3

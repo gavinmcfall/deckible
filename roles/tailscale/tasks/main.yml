@@ -1,0 +1,66 @@
+# Tailscale Role - Zero-Config VPN
+# =================================
+# Installs Tailscale for secure remote access from anywhere.
+#
+# What is Tailscale?
+# ------------------
+# Tailscale creates a private network between your devices using WireGuard.
+# - Access your Deck from anywhere (home, work, travel)
+# - No port forwarding or firewall changes needed
+# - End-to-end encrypted (even Tailscale can't see your traffic)
+# - Free for personal use (up to 100 devices)
+#
+# After Installation:
+# -------------------
+# 1. Open Tailscale from Application Menu (or run `tailscale up`)
+# 2. Sign in with Google/Microsoft/GitHub/etc.
+# 3. Authorize the device
+# 4. Your Deck gets a Tailscale IP (100.x.x.x)
+#
+# Usage Examples:
+# ---------------
+#   # SSH from anywhere
+#   ssh deck@100.x.x.x
+#
+#   # Use MagicDNS hostname (if enabled in Tailscale admin)
+#   ssh deck@steamdeck
+#
+#   # Send files via Taildrop
+#   tailscale file cp myfile.txt steamdeck:
+#
+# Tailscale + Sunshine/Moonlight:
+# -------------------------------
+# For remote game streaming, use Tailscale to connect your devices,
+# then use the Tailscale IP in Moonlight. Works great for playing
+# your Deck games from anywhere with decent internet.
+#
+# Troubleshooting:
+# ----------------
+# - Not connecting? Check `tailscale status`
+# - Re-authenticate: `tailscale up`
+# - Check if daemon is running: `systemctl status tailscaled`
+
+---
+- name: Install Tailscale via Flatpak
+  community.general.flatpak:
+    name: com.tailscale.IPNQt
+    state: present
+  # The Flatpak version is recommended because it survives SteamOS updates.
+  # Limitation: May not auto-start as reliably as the pacman version.
+  # Make sure Tailscale is connected before leaving home!
+
+- name: Display Tailscale setup instructions
+  ansible.builtin.debug:
+    msg: |
+      Tailscale installed!
+
+      Next steps:
+      1. Open Tailscale from the Application Menu
+      2. Click "Log in" and sign in with your account
+      3. Authorize the device in your browser
+
+      Your Deck will appear in your Tailscale admin console.
+      Use `tailscale ip -4` to see your Tailscale IP address.
+
+      Pro tip: Enable MagicDNS in Tailscale admin to access
+      devices by name (e.g., ssh deck@steamdeck)

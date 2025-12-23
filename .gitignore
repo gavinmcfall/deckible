@@ -1,0 +1,34 @@
+# Private repository overlay
+# Clone your private repo here: ./setup.sh <your-private-repo-url>
+private/
+
+# Local installation files (use private/files/ instead for portability)
+files/flatpaks/*
+files/appimages/*
+!files/flatpaks/.gitkeep
+!files/appimages/.gitkeep
+!files/README.md
+
+# Ansible
+*.retry
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+venv/
+.venv/
+env/
+.env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db

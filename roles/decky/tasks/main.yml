@@ -1,0 +1,139 @@
+# Decky Loader Role - Gaming Mode Plugins
+# ========================================
+# Installs Decky Loader and configurable plugins.
+#
+# What is Decky Loader?
+# ---------------------
+# Decky lets you install plugins that add features to Gaming Mode.
+# Plugins are configured in group_vars/all.yml under decky_plugins.
+#
+# Plugin Categories:
+# ------------------
+# Performance & System:
+#   - PowerTools: Fine-grained CPU/GPU control, per-game profiles
+#   - AutoSuspend: Auto-suspend after inactivity
+#   - Battery Tracker: Track battery health over time
+#
+# Game Info & Store:
+#   - ProtonDB Badges: Compatibility ratings in your library
+#   - SteamGridDB: Custom artwork for non-Steam games
+#   - HLTB: How Long to Beat game times
+#   - PlayTime: Detailed play time tracking
+#   - IsThereAnyDeal: Game deal notifications
+#
+# Customization:
+#   - CSS Loader: Visual themes for Gaming Mode
+#   - Animation Changer: Custom boot/suspend animations
+#
+# Connectivity:
+#   - Bluetooth: Better Bluetooth management
+#   - BT Wake Control: Bluetooth wake control
+#   - Tailscale Control: VPN control from Gaming Mode
+#   - KDE Connect: Phone/desktop integration
+#
+# Sync & Transfer:
+#   - Decky Cloud Save: Cloud sync for non-Steam games
+#   - DeckMTP: MTP file transfer support
+#   - AutoFlatpaks: Auto-update Flatpak apps
+#
+# Social & Notifications:
+#   - Discord Status: Show game status on Discord
+#   - Decky Notifications: Desktop notifications in Gaming Mode
+#
+# Audio:
+#   - MagicPods: AirPods battery level & controls
+#
+# Accessing Decky:
+# ----------------
+# 1. In Gaming Mode, press the ... button (Quick Access Menu)
+# 2. Navigate to the Decky tab (plug icon at bottom)
+#
+# Troubleshooting:
+# ----------------
+# Decky tab not showing?
+#   1. Restart Gaming Mode: hold power > Restart Steam
+#   2. If still missing, reinstall by running this playbook
+#
+# Plugin not working?
+#   1. Check for updates in Decky settings
+#   2. Disable/re-enable the plugin
+#   3. Check the plugin's GitHub issues
+
+---
+# Install Decky Loader
+- name: Create temporary directory for Decky installer
+  ansible.builtin.tempfile:
+    state: directory
+    suffix: decky
+  register: decky_temp
+
+- name: Download Decky Loader installer
+  ansible.builtin.get_url:
+    url: https://github.com/SteamDeckHomebrew/decky-installer/releases/latest/download/install_release.sh
+    dest: "{{ decky_temp.path }}/install_decky.sh"
+    mode: '0755'
+
+- name: Run Decky Loader installer
+  ansible.builtin.command:
+    cmd: "{{ decky_temp.path }}/install_decky.sh"
+  register: decky_install
+  changed_when: "'already installed' not in decky_install.stdout"
+
+- name: Clean up Decky installer
+  ansible.builtin.file:
+    path: "{{ decky_temp.path }}"
+    state: absent
+
+# Ensure plugins directory exists
+- name: Ensure Decky plugins directory exists
+  ansible.builtin.file:
+    path: "{{ deck_home }}/homebrew/plugins"
+    state: directory
+    mode: '0755'
+
+# Install Decky Plugins
+# ---------------------
+# Plugins are downloaded from their GitHub/GitLab releases and
+# extracted to ~/homebrew/plugins/
+
+- name: Create temporary directory for plugin downloads
+  ansible.builtin.tempfile:
+    state: directory
+    suffix: decky_plugins
+  register: plugin_temp
+
+# Build list of enabled plugins
+- name: Build enabled plugins list
+  ansible.builtin.set_fact:
+    enabled_plugins: "{{ decky_plugins | dict2items | selectattr('value.enabled', 'equalto', true) | list }}"
+
+# Download and install each enabled plugin
+- name: Download and install Decky plugins
+  ansible.builtin.include_tasks: install_plugin.yml
+  loop: "{{ enabled_plugins }}"
+  loop_control:
+    loop_var: plugin
+    label: "{{ plugin.key }}"
+
+- name: Clean up plugin downloads
+  ansible.builtin.file:
+    path: "{{ plugin_temp.path }}"
+    state: absent
+
+- name: Display Decky setup info
+  ansible.builtin.debug:
+    msg: |
+      Decky Loader and plugins installed!
+
+      To use Decky:
+      1. Switch to Gaming Mode
+      2. Press the ... button (Quick Access Menu)
+      3. Look for the Decky tab (plug icon at bottom)
+
+      Installed plugins:
+      {% for plugin in enabled_plugins %}
+      - {{ plugin.key }}: {{ plugin.value.description }}
+      {% endfor %}
+
+      Note: Some plugins may need additional configuration.
+      Open each plugin in the Decky menu to set it up.

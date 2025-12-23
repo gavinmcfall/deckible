@@ -1,0 +1,203 @@
+# Emulation Role - EmuDeck Setup
+# ===============================
+# Downloads and prepares EmuDeck for emulation setup.
+#
+# Local Files:
+# ------------
+# If you have a Patreon/early access version of EmuDeck, place it in:
+#   private/files/appimages/EmuDeck EA SteamOS.desktop.download
+# Or in files/appimages/ if not using a private overlay.
+# The playbook will use that instead of downloading the public version.
+# Also supports: EmuDeck*.AppImage, EmuDeck*.desktop
+#
+# What is EmuDeck?
+# ----------------
+# EmuDeck is an all-in-one emulation setup tool that:
+# - Downloads and configures emulators (RetroArch, Dolphin, PCSX2, etc.)
+# - Sets up optimal settings for Steam Deck
+# - Organizes ROM folders
+# - Adds games to Steam with artwork via Steam ROM Manager
+# - Configures controller layouts and hotkeys
+#
+# Why GUI Required?
+# -----------------
+# EmuDeck's installer is interactive - it asks you to choose:
+# - Easy Mode vs Custom Mode
+# - Installation location (internal vs SD card)
+# - Which emulators to install
+# - Theme and sync options
+#
+# After Running This Playbook:
+# ----------------------------
+# 1. Switch to Desktop Mode
+# 2. Double-click EmuDeck on Desktop (or in ~/Applications/)
+# 3. Follow the setup wizard (Easy Mode recommended for first time)
+# 4. After setup, add ROMs to ~/Emulation/roms/<system>/
+# 5. Run Steam ROM Manager to add games to Steam
+#
+# ROM Formats:
+# ------------
+# | System    | Formats                    |
+# |-----------|----------------------------|
+# | NES       | .nes, .zip                 |
+# | SNES      | .sfc, .smc, .zip           |
+# | N64       | .n64, .z64, .v64           |
+# | GameCube  | .iso, .gcz, .rvz           |
+# | Wii       | .iso, .wbfs, .rvz          |
+# | PS1       | .bin/.cue, .chd, .iso      |
+# | PS2       | .iso, .chd                 |
+# | PSP       | .iso, .cso                 |
+# | Switch    | .nsp, .xci                 |
+#
+# Use .chd for disc games and .rvz for GameCube/Wii to save space.
+#
+# BIOS Files:
+# -----------
+# Some systems require BIOS files (PS1, PS2, Dreamcast, Saturn).
+# Place them in ~/Emulation/bios/ after running EmuDeck setup.
+# You must obtain BIOS files from your own consoles.
+#
+# Hotkeys (Default):
+# ------------------
+# | Action       | Hotkey              |
+# |--------------|---------------------|
+# | Quick save   | Select + R1         |
+# | Quick load   | Select + L1         |
+# | Fast forward | Select + R2         |
+# | Exit game    | Select + Start (hold)|
+# | RetroArch menu| L3 + R3            |
+
+---
+- name: Ensure Applications directory exists
+  ansible.builtin.file:
+    path: "{{ deck_home }}/Applications"
+    state: directory
+    mode: '0755'
+
+- name: Ensure Desktop directory exists
+  ansible.builtin.file:
+    path: "{{ deck_home }}/Desktop"
+    state: directory
+    mode: '0755'
+
+# Check for local EmuDeck files (Patreon/EA version)
+# Checks private/files/ first (overlay repo), then files/ (local)
+# Supported formats:
+#   - EmuDeck EA SteamOS.desktop.download (Patreon download)
+#   - EmuDeck*.AppImage
+#   - EmuDeck*.desktop
+
+- name: Check for EmuDeck desktop file in private overlay
+  ansible.builtin.find:
+    paths: "{{ playbook_dir }}/private/files/appimages"
+    patterns:
+      - "EmuDeck*.desktop.download"
+      - "EmuDeck*.desktop"
+  register: private_emudeck_desktop
+  delegate_to: localhost
+  failed_when: false
+
+- name: Check for EmuDeck desktop file in local files
+  ansible.builtin.find:
+    paths: "{{ playbook_dir }}/files/appimages"
+    patterns:
+      - "EmuDeck*.desktop.download"
+      - "EmuDeck*.desktop"
+  register: local_emudeck_desktop_fallback
+  delegate_to: localhost
+  when: private_emudeck_desktop.files | default([]) | length == 0
+
+- name: Set EmuDeck desktop file source
+  ansible.builtin.set_fact:
+    local_emudeck_desktop:
+      files: "{{ private_emudeck_desktop.files if (private_emudeck_desktop.files | default([]) | length > 0) else (local_emudeck_desktop_fallback.files | default([])) }}"
+
+- name: Check for EmuDeck AppImage in private overlay
+  ansible.builtin.find:
+    paths: "{{ playbook_dir }}/private/files/appimages"
+    patterns: "EmuDeck*.AppImage"
+  register: private_emudeck_appimage
+  delegate_to: localhost
+  failed_when: false
+
+- name: Check for EmuDeck AppImage in local files
+  ansible.builtin.find:
+    paths: "{{ playbook_dir }}/files/appimages"
+    patterns: "EmuDeck*.AppImage"
+  register: local_emudeck_appimage_fallback
+  delegate_to: localhost
+  when: private_emudeck_appimage.files | default([]) | length == 0
+
+- name: Set EmuDeck AppImage source
+  ansible.builtin.set_fact:
+    local_emudeck_appimage:
+      files: "{{ private_emudeck_appimage.files if (private_emudeck_appimage.files | default([]) | length > 0) else (local_emudeck_appimage_fallback.files | default([])) }}"
+
+# Use local desktop file if available (Patreon .desktop.download)
+- name: Copy local EmuDeck desktop file
+  ansible.builtin.copy:
+    src: "{{ local_emudeck_desktop.files[0].path }}"
+    dest: "{{ deck_home }}/Desktop/EmuDeck.desktop"
+    mode: '0755'
+  when: local_emudeck_desktop.files | length > 0
+
+# Use local AppImage if available
+- name: Copy local EmuDeck AppImage
+  ansible.builtin.copy:
+    src: "{{ local_emudeck_appimage.files[0].path }}"
+    dest: "{{ deck_home }}/Applications/EmuDeck.AppImage"
+    mode: '0755'
+  when:
+    - local_emudeck_appimage.files | length > 0
+    - local_emudeck_desktop.files | length == 0
+
+- name: Create desktop shortcut for local EmuDeck AppImage
+  ansible.builtin.copy:
+    dest: "{{ deck_home }}/Desktop/EmuDeck.desktop"
+    mode: '0755'
+    content: |
+      [Desktop Entry]
+      Name=EmuDeck
+      Exec={{ deck_home }}/Applications/EmuDeck.AppImage
+      Icon=steamdeck-gaming-return
+      Terminal=false
+      Type=Application
+      Categories=Game;
+      Comment=Emulation setup tool
+  when:
+    - local_emudeck_appimage.files | length > 0
+    - local_emudeck_desktop.files | length == 0
+
+# Set fact for whether we have local files
+- name: Set local EmuDeck fact
+  ansible.builtin.set_fact:
+    has_local_emudeck: "{{ (local_emudeck_desktop.files | length > 0) or (local_emudeck_appimage.files | length > 0) }}"
+
+# Fall back to public download if no local file
+- name: Download EmuDeck installer (public version)
+  ansible.builtin.get_url:
+    url: https://www.emudeck.com/EmuDeck.desktop
+    dest: "{{ deck_home }}/Desktop/EmuDeck.desktop"
+    mode: '0755'
+  when: not has_local_emudeck
+
+- name: Display EmuDeck setup instructions
+  ansible.builtin.debug:
+    msg: |
+      EmuDeck {{ '(Patreon/EA version)' if has_local_emudeck else '(public version)' }} ready!
+
+      To complete setup:
+      1. Switch to Desktop Mode
+      2. Double-click EmuDeck on your Desktop
+      3. Follow the setup wizard
+         - Easy Mode: Recommended for first-time setup
+         - Custom Mode: Choose specific emulators and options
+      4. Choose installation location (SD card recommended)
+      5. Wait for emulators to download and configure
+
+      After EmuDeck setup:
+      1. Copy ROMs to ~/Emulation/roms/<system>/
+      2. Add BIOS files to ~/Emulation/bios/ (for PS1, PS2, etc.)
+      3. Open Steam ROM Manager (in EmuDeck tools)
+      4. Click Preview, then Save to Steam
+      5. Restart Steam to see your games!

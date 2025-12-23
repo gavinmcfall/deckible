@@ -1,0 +1,151 @@
+# Proton Role - Windows Game Compatibility
+# =========================================
+# Installs tools for better Windows game compatibility on Steam Deck.
+#
+# What is Proton?
+# ---------------
+# Proton is Valve's tool for running Windows games on Linux:
+# - Based on Wine (Windows compatibility layer)
+# - Enhanced with DXVK (DirectX to Vulkan translation)
+# - Integrated into Steam
+# - Constantly improving
+#
+# Checking Compatibility:
+# -----------------------
+# ProtonDB.com shows community ratings:
+# | Rating   | Meaning                    |
+# |----------|----------------------------|
+# | Platinum | Perfect, no tweaks needed  |
+# | Gold     | Works with minor issues    |
+# | Silver   | Playable with some problems|
+# | Bronze   | Runs but may have issues   |
+# | Borked   | Doesn't work               |
+#
+# The ProtonDB Badges Decky plugin shows these ratings in your library.
+#
+# Proton-GE:
+# ----------
+# GloriousEggroll's custom Proton build with:
+# - Additional patches and fixes
+# - Media codec support (for cutscenes)
+# - Faster updates than official Proton
+#
+# Use Proton-GE when:
+# - Official Proton doesn't work
+# - Cutscenes don't play (codec issues)
+# - ProtonDB recommends it
+#
+# Protontricks:
+# -------------
+# Winetricks for Proton - install Windows components into game prefixes.
+# Useful for games that need specific Visual C++ runtimes, .NET, etc.
+#
+# Usage: protontricks <appid> --gui
+# Find AppID: Right-click game > Properties > Updates (shown at bottom)
+#
+# Common Launch Options:
+# ----------------------
+# Add to game Properties > Launch Options:
+#
+#   PROTON_NO_ESYNC=1 %command%     # Fixes some crashes
+#   PROTON_NO_FSYNC=1 %command%     # Fixes some crashes
+#   DXVK_ASYNC=1 %command%          # Reduce shader stutter
+#   gamescope -w 1280 -h 800 -- %command%  # Force resolution
+#
+# Anti-Cheat:
+# -----------
+# Some anti-cheat systems block Proton:
+# | Anti-Cheat | Status                          |
+# |------------|-------------------------------- |
+# | EAC        | Works if developer enables      |
+# | BattlEye   | Works if developer enables      |
+# | Vanguard   | Does not work (Valorant)        |
+#
+# Check areweanticheatyet.com for current status.
+
+---
+- name: Install ProtonUp-Qt
+  community.general.flatpak:
+    name: net.davidotek.pupgui2
+    state: present
+  when: install_protonup_qt | default(true)
+  # ProtonUp-Qt is a GUI for managing Proton versions.
+  # Use it to install Proton-GE and other custom Proton builds.
+
+- name: Install Protontricks
+  community.general.flatpak:
+    name: com.github.Matoking.protontricks
+    state: present
+  when: install_protontricks | default(true)
+  # Protontricks lets you install Windows components into game prefixes.
+  # Useful when a game needs vcrun2019, d3dx9, etc.
+
+# Proton-GE Installation
+# ----------------------
+# ProtonUp-Qt can install Proton-GE, but we can also do it directly.
+
+- name: Ensure Steam compatibility tools directory exists
+  ansible.builtin.file:
+    path: "{{ deck_home }}/.steam/root/compatibilitytools.d"
+    state: directory
+    mode: '0755'
+  when: install_proton_ge | default(true)
+
+- name: Get latest Proton-GE release info
+  ansible.builtin.uri:
+    url: https://api.github.com/repos/GloriousEggroll/proton-ge-custom/releases/latest
+    return_content: true
+  register: proton_ge_release
+  when: install_proton_ge | default(true)
+
+- name: Extract Proton-GE version and download URL
+  ansible.builtin.set_fact:
+    proton_ge_version: "{{ proton_ge_release.json.tag_name }}"
+    proton_ge_url: "{{ proton_ge_release.json.assets | selectattr('name', 'match', '.*\\.tar\\.gz$') | map(attribute='browser_download_url') | first }}"
+  when: install_proton_ge | default(true)
+
+- name: Check if Proton-GE already installed
+  ansible.builtin.stat:
+    path: "{{ deck_home }}/.steam/root/compatibilitytools.d/{{ proton_ge_version }}"
+  register: proton_ge_installed
+  when: install_proton_ge | default(true)
+
+- name: Download Proton-GE
+  ansible.builtin.get_url:
+    url: "{{ proton_ge_url }}"
+    dest: "/tmp/proton-ge.tar.gz"
+    mode: '0644'
+  when:
+    - install_proton_ge | default(true)
+    - not proton_ge_installed.stat.exists
+
+- name: Extract Proton-GE
+  ansible.builtin.unarchive:
+    src: "/tmp/proton-ge.tar.gz"
+    dest: "{{ deck_home }}/.steam/root/compatibilitytools.d/"
+    remote_src: true
+  when:
+    - install_proton_ge | default(true)
+    - not proton_ge_installed.stat.exists
+
+- name: Clean up Proton-GE download
+  ansible.builtin.file:
+    path: "/tmp/proton-ge.tar.gz"
+    state: absent
+  when: install_proton_ge | default(true)
+
+- name: Display Proton tools info
+  ansible.builtin.debug:
+    msg: |
+      Proton tools installed!
+
+      Proton-GE {{ proton_ge_version | default('') }}:
+      - Select in game Properties > Compatibility
+      - Use when official Proton has issues
+
+      ProtonUp-Qt:
+      - Launch from Desktop Mode to manage Proton versions
+
+      Protontricks:
+      - Run: protontricks <appid> --gui
+      - Install Windows components like vcrun2019

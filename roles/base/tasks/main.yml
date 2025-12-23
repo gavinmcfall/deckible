@@ -1,0 +1,56 @@
+# Base Role - Prerequisites and Flathub Setup
+# ============================================
+# This role sets up the foundation for everything else:
+# - Verifies sudo access is working
+# - Ensures Flathub repository is configured
+# - Updates Flatpak apps
+#
+# SteamOS Note:
+# The root filesystem is read-only (immutable). Traditional pacman packages
+# don't persist after SteamOS updates. Flatpak is the recommended way to
+# install applications - they survive updates and are sandboxed.
+
+---
+- name: Verify sudo is working
+  ansible.builtin.command: sudo -n true
+  register: sudo_check
+  changed_when: false
+  failed_when: false
+
+- name: Fail if sudo requires password and none provided
+  ansible.builtin.fail:
+    msg: |
+      Sudo password required. Run the playbook with --ask-become-pass:
+        ansible-playbook playbook.yml --ask-become-pass
+
+      If you haven't set a sudo password yet:
+        1. Open Konsole in Desktop Mode
+        2. Run: passwd
+        3. Set your password
+        4. Run this playbook again
+  when: sudo_check.rc != 0
+
+# Flathub Setup
+# -------------
+# Flathub is the main source for Flatpak applications.
+# Should be enabled by default on SteamOS, but we ensure it's there.
+
+- name: Check if Flathub remote exists
+  ansible.builtin.command: flatpak remote-list --columns=name
+  register: flatpak_remotes
+  changed_when: false
+
+- name: Add Flathub repository
+  ansible.builtin.command: >
+    flatpak remote-add --if-not-exists flathub
+    https://flathub.org/repo/flathub.flatpakrepo
+  when: "'flathub' not in flatpak_remotes.stdout"
+
+# Update existing Flatpaks
+# ------------------------
+# Keep installed apps up to date
+
+- name: Update all Flatpak applications
+  ansible.builtin.command: flatpak update -y --noninteractive
+  register: flatpak_update
+  changed_when: "'Nothing to do' not in flatpak_update.stdout"

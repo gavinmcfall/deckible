@@ -1,0 +1,110 @@
+# Deckible - Steam Deck Ansible Playbook
+# =======================================
+# Automates the setup and configuration of a Steam Deck.
+#
+# Usage:
+#   ./setup.sh                                    # First time setup
+#   ansible-playbook playbook.yml --ask-become-pass
+#
+# Configuration:
+#   - Defaults: group_vars/all.yml
+#   - Your settings: private/group_vars/all.yml (overrides defaults)
+#   - Private files: private/files/ (Patreon downloads, etc.)
+#
+# See README.md for full documentation.
+
+---
+- name: Configure Steam Deck
+  hosts: localhost
+  gather_facts: true
+
+  pre_tasks:
+    - name: Verify running on Steam Deck or compatible system
+      ansible.builtin.assert:
+        that:
+          - ansible_distribution == "Arch" or ansible_os_family == "Archlinux"
+        fail_msg: "This playbook is designed for SteamOS/Arch Linux"
+        success_msg: "Running on compatible system: {{ ansible_distribution }}"
+      tags: always
+
+    # Load private configuration if it exists (overrides group_vars)
+    - name: Check for private configuration
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/private/group_vars/all.yml"
+      register: private_config
+      tags: always
+
+    - name: Load private configuration
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/private/group_vars/all.yml"
+      when: private_config.stat.exists
+      tags: always
+
+    - name: Note configuration source
+      ansible.builtin.debug:
+        msg: "{{ 'Using private configuration from private/group_vars/all.yml' if private_config.stat.exists else 'Using default configuration from group_vars/all.yml' }}"
+      tags: always
+
+    # Set private files path for roles to use
+    - name: Set private files path
+      ansible.builtin.set_fact:
+        private_files_path: "{{ playbook_dir }}/private/files"
+        has_private_files: "{{ (playbook_dir + '/private/files') is directory }}"
+      tags: always
+
+  roles:
+    # Base setup - Flathub, prerequisites
+    - role: base
+      tags: [base, always]
+
+    # Desktop applications via Flatpak
+    - role: flatpak_apps
+      tags: [apps, flatpak]
+      when: install_flatpak_apps | default(true)
+
+    # SSH server for remote access
+    - role: ssh
+      tags: [ssh, remote]
+      when: install_ssh | default(true)
+
+    # Tailscale VPN
+    - role: tailscale
+      tags: [tailscale, remote, vpn]
+      when: install_tailscale | default(false)
+
+    # Remote desktop (Sunshine/Moonlight)
+    - role: remote_desktop
+      tags: [remote_desktop, remote, streaming]
+      when: install_remote_desktop | default(false)
+
+    # Decky Loader for Gaming Mode plugins
+    - role: decky
+      tags: [decky, plugins, gaming]
+      when: install_decky | default(true)
+
+    # Proton tools (Proton-GE, Protontricks)
+    - role: proton
+      tags: [proton, gaming, wine]
+      when: install_proton_tools | default(true)
+
+    # Emulation setup (downloads EmuDeck)
+    - role: emulation
+      tags: [emulation, roms, gaming]
+      when: install_emudeck | default(false)
+
+    # Distrobox apps (password managers with full features)
+    - role: distrobox
+      tags: [distrobox, containers, password_manager]
+      when: password_manager_install_method | default('flatpak') == 'distrobox'
+
+  post_tasks:
+    - name: Setup complete
+      ansible.builtin.debug:
+        msg: |
+          Steam Deck setup complete!
+
+          Next steps:
+          - Restart to Gaming Mode to see Decky plugins
+          - Run Steam ROM Manager if you installed emulators
+          - Check the README for manual configuration steps
+      tags: always

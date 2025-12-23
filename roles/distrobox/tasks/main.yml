@@ -1,0 +1,235 @@
+# Distrobox Role - Containerized Apps
+# ====================================
+# Uses Distrobox to run apps in containers that survive SteamOS updates.
+# Containers are stored in ~/.local/share/distrobox/ (persists in home dir).
+#
+# Why Distrobox?
+# --------------
+# - Run native Linux packages (.deb, .rpm, AUR) without Flatpak limitations
+# - Containers survive SteamOS updates (stored in home directory)
+# - Full system integration (GUI, home dir, devices)
+# - Smaller than VMs, faster than emulation
+#
+# Password Managers via Distrobox:
+# --------------------------------
+# Flatpak versions have limitations (no system auth, no SSH agent).
+# Native versions in Distrobox have full features including:
+# - System auth unlock (use sudo password to unlock)
+# - SSH agent integration
+# - Browser extension stays in sync
+#
+# Faster Auth on Steam Deck:
+# --------------------------
+# Steam Deck doesn't have a fingerprint reader, but with native installs
+# you can use "system authentication" - your sudo password unlocks the app.
+# This can be faster than typing your master password.
+
+---
+# Only run if distrobox install method is selected
+- name: Check if Distrobox installation is needed
+  ansible.builtin.set_fact:
+    needs_distrobox: "{{ password_manager_install_method | default('flatpak') == 'distrobox' and password_manager | default('none') != 'none' }}"
+
+- name: Skip Distrobox setup
+  ansible.builtin.debug:
+    msg: "Distrobox not needed (using Flatpak or no password manager selected)"
+  when: not needs_distrobox
+
+# Distrobox should be pre-installed on SteamOS
+- name: Check if Distrobox is available
+  ansible.builtin.command: which distrobox
+  register: distrobox_check
+  changed_when: false
+  failed_when: false
+  when: needs_distrobox
+
+- name: Warn if Distrobox not found
+  ansible.builtin.fail:
+    msg: "Distrobox not found. It should be pre-installed on SteamOS."
+  when:
+    - needs_distrobox
+    - distrobox_check.rc != 0
+
+# Create Arch Linux container
+- name: Check if Arch container exists
+  ansible.builtin.command: distrobox list --no-color
+  register: distrobox_list
+  changed_when: false
+  when:
+    - needs_distrobox
+    - distrobox_check.rc == 0
+
+- name: Create Arch Linux container
+  ansible.builtin.command: distrobox create -i archlinux:latest -n arch --yes
+  when:
+    - needs_distrobox
+    - distrobox_check.rc == 0
+    - "'arch' not in distrobox_list.stdout"
+
+# Install yay (AUR helper) in the container
+- name: Install base-devel and git in Arch container
+  ansible.builtin.command: distrobox enter arch -- sudo pacman -S --needed --noconfirm base-devel git
+  when:
+    - needs_distrobox
+    - distrobox_check.rc == 0
+  changed_when: false
+
+- name: Check if yay is installed
+  ansible.builtin.command: distrobox enter arch -- which yay
+  register: yay_check
+  changed_when: false
+  failed_when: false
+  when:
+    - needs_distrobox
+    - distrobox_check.rc == 0
+
+- name: Clone yay repository
+  ansible.builtin.command: distrobox enter arch -- git clone https://aur.archlinux.org/yay-bin.git /tmp/yay-bin
+  when:
+    - needs_distrobox
+    - distrobox_check.rc == 0
+    - yay_check.rc != 0
+  changed_when: true
+  failed_when: false
+
+- name: Build and install yay
+  ansible.builtin.command: distrobox enter arch -- bash -c "cd /tmp/yay-bin && makepkg -si --noconfirm"
+  when:
+    - needs_distrobox
+    - distrobox_check.rc == 0
+    - yay_check.rc != 0
+  changed_when: true
+
+# ============================================================================
+# 1Password
+# ============================================================================
+- name: Check if 1Password is installed in container
+  ansible.builtin.command: distrobox enter arch -- which 1password
+  register: onepassword_check
+  changed_when: false
+  failed_when: false
+  when:
+    - needs_distrobox
+    - password_manager == '1password'
+
+- name: Install 1Password from AUR
+  ansible.builtin.command: distrobox enter arch -- yay -S --noconfirm 1password
+  when:
+    - needs_distrobox
+    - password_manager == '1password'
+    - onepassword_check.rc != 0
+  changed_when: true
+
+- name: Export 1Password to host desktop
+  ansible.builtin.command: distrobox enter arch -- distrobox-export --app 1password
+  when:
+    - needs_distrobox
+    - password_manager == '1password'
+  changed_when: false
+  failed_when: false
+
+# ============================================================================
+# Bitwarden
+# ============================================================================
+- name: Check if Bitwarden is installed in container
+  ansible.builtin.command: distrobox enter arch -- which bitwarden-desktop
+  register: bitwarden_check
+  changed_when: false
+  failed_when: false
+  when:
+    - needs_distrobox
+    - password_manager == 'bitwarden'
+
+- name: Install Bitwarden from AUR
+  ansible.builtin.command: distrobox enter arch -- yay -S --noconfirm bitwarden-desktop
+  when:
+    - needs_distrobox
+    - password_manager == 'bitwarden'
+    - bitwarden_check.rc != 0
+  changed_when: true
+
+- name: Export Bitwarden to host desktop
+  ansible.builtin.command: distrobox enter arch -- distrobox-export --app bitwarden-desktop
+  when:
+    - needs_distrobox
+    - password_manager == 'bitwarden'
+  changed_when: false
+  failed_when: false
+
+# ============================================================================
+# KeePassXC
+# ============================================================================
+- name: Check if KeePassXC is installed in container
+  ansible.builtin.command: distrobox enter arch -- which keepassxc
+  register: keepassxc_check
+  changed_when: false
+  failed_when: false
+  when:
+    - needs_distrobox
+    - password_manager == 'keepassxc'
+
+- name: Install KeePassXC from Arch repos
+  ansible.builtin.command: distrobox enter arch -- sudo pacman -S --noconfirm keepassxc
+  when:
+    - needs_distrobox
+    - password_manager == 'keepassxc'
+    - keepassxc_check.rc != 0
+  changed_when: true
+
+- name: Export KeePassXC to host desktop
+  ansible.builtin.command: distrobox enter arch -- distrobox-export --app keepassxc
+  when:
+    - needs_distrobox
+    - password_manager == 'keepassxc'
+  changed_when: false
+  failed_when: false
+
+# ============================================================================
+# Proton Pass
+# ============================================================================
+- name: Check if Proton Pass is installed in container
+  ansible.builtin.command: distrobox enter arch -- which proton-pass
+  register: protonpass_check
+  changed_when: false
+  failed_when: false
+  when:
+    - needs_distrobox
+    - password_manager == 'protonpass'
+
+- name: Install Proton Pass from AUR
+  ansible.builtin.command: distrobox enter arch -- yay -S --noconfirm proton-pass
+  when:
+    - needs_distrobox
+    - password_manager == 'protonpass'
+    - protonpass_check.rc != 0
+  changed_when: true
+
+- name: Export Proton Pass to host desktop
+  ansible.builtin.command: distrobox enter arch -- distrobox-export --app proton-pass
+  when:
+    - needs_distrobox
+    - password_manager == 'protonpass'
+  changed_when: false
+  failed_when: false
+
+# ============================================================================
+# Setup Info
+# ============================================================================
+- name: Display password manager setup info
+  ansible.builtin.debug:
+    msg: |
+      {{ password_manager | title }} installed via Distrobox (Arch container)!
+
+      Features available (not possible with Flatpak):
+      - System authentication: Use sudo password to unlock
+      - SSH agent integration (1Password, KeePassXC)
+      - Browser integration stays in sync
+
+      To enable system auth (if supported):
+      - 1Password: Settings > Security > Unlock with system authentication
+      - Bitwarden: Settings > Security > Unlock with biometrics
+      - KeePassXC: Settings > Security > Unlock with system credentials
+
+      The app appears in your normal application menu.
+      First launch may take a moment as the container starts.
+  when: needs_distrobox

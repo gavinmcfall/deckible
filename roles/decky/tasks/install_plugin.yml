@@ -1,0 +1,106 @@
+# Install a single Decky plugin from GitHub/GitLab releases
+# This file is included by main.yml for each enabled plugin
+
+---
+# Reset variables for each plugin
+- name: "{{ plugin.key }} - Reset plugin variables"
+  ansible.builtin.set_fact:
+    plugin_zip_url: ""
+    plugin_version: ""
+
+# ============================================================================
+# GitHub Release Handling
+# ============================================================================
+- name: "{{ plugin.key }} - Get latest GitHub release"
+  ansible.builtin.uri:
+    url: "https://api.github.com/repos/{{ plugin.value.repo | regex_replace('^https://github.com/', '') | regex_replace('\\.git$', '') }}/releases/latest"
+    return_content: true
+    headers:
+      Accept: "application/vnd.github.v3+json"
+  register: github_release
+  when: plugin.value.repo_type == "github"
+  failed_when: false
+
+- name: "{{ plugin.key }} - Find zip download URL (GitHub)"
+  ansible.builtin.set_fact:
+    plugin_zip_url: "{{ (github_release.json.assets | selectattr('name', 'match', '.*\\.zip$') | first).browser_download_url }}"
+    plugin_version: "{{ github_release.json.tag_name }}"
+  when:
+    - plugin.value.repo_type == "github"
+    - github_release.status | default(0) == 200
+    - github_release.json.assets | default([]) | selectattr('name', 'match', '.*\\.zip$') | list | length > 0
+  failed_when: false
+
+# ============================================================================
+# GitLab Release Handling
+# ============================================================================
+# GitLab API: Get project ID from URL, then fetch releases
+- name: "{{ plugin.key }} - Extract GitLab project path"
+  ansible.builtin.set_fact:
+    gitlab_host: "{{ plugin.value.repo | regex_replace('^https://([^/]+)/.*', '\\1') }}"
+    gitlab_project_path: "{{ plugin.value.repo | regex_replace('^https://[^/]+/', '') | regex_replace('\\.git$', '') | urlencode | regex_replace('/', '%2F') }}"
+  when: plugin.value.repo_type == "gitlab"
+
+- name: "{{ plugin.key }} - Get latest GitLab release"
+  ansible.builtin.uri:
+    url: "https://{{ gitlab_host }}/api/v4/projects/{{ gitlab_project_path }}/releases"
+    return_content: true
+  register: gitlab_releases
+  when: plugin.value.repo_type == "gitlab"
+  failed_when: false
+
+- name: "{{ plugin.key }} - Find zip download URL (GitLab)"
+  ansible.builtin.set_fact:
+    plugin_zip_url: "{{ (gitlab_releases.json[0].assets.links | selectattr('name', 'match', '.*\\.zip$') | first).direct_asset_url | default((gitlab_releases.json[0].assets.links | selectattr('url', 'match', '.*\\.zip$') | first).url) }}"
+    plugin_version: "{{ gitlab_releases.json[0].tag_name }}"
+  when:
+    - plugin.value.repo_type == "gitlab"
+    - gitlab_releases.status | default(0) == 200
+    - gitlab_releases.json | default([]) | length > 0
+    - gitlab_releases.json[0].assets.links | default([]) | selectattr('name', 'match', '.*\\.zip$') | list | length > 0 or gitlab_releases.json[0].assets.links | default([]) | selectattr('url', 'match', '.*\\.zip$') | list | length > 0
+  failed_when: false
+
+# Check if plugin is already installed
+- name: "{{ plugin.key }} - Check if plugin directory exists"
+  ansible.builtin.stat:
+    path: "{{ deck_home }}/homebrew/plugins/{{ plugin.key }}"
+  register: plugin_dir
+
+# Download plugin zip
+- name: "{{ plugin.key }} - Download plugin zip"
+  ansible.builtin.get_url:
+    url: "{{ plugin_zip_url }}"
+    dest: "{{ plugin_temp.path }}/{{ plugin.key }}.zip"
+    mode: '0644'
+  when:
+    - plugin_zip_url | default('') | length > 0
+    - not plugin_dir.stat.exists
+  register: plugin_download
+  failed_when: false
+
+# Extract plugin
+- name: "{{ plugin.key }} - Extract plugin"
+  ansible.builtin.unarchive:
+    src: "{{ plugin_temp.path }}/{{ plugin.key }}.zip"
+    dest: "{{ deck_home }}/homebrew/plugins/"
+    remote_src: true
+  when:
+    - plugin_download is defined
+    - plugin_download is not failed
+    - plugin_download.changed | default(false)
+  failed_when: false
+
+# Log result
+- name: "{{ plugin.key }} - Log installation result"
+  ansible.builtin.debug:
+    msg: >-
+      {% if plugin_download is defined and plugin_download.changed | default(false) %}
+      Installed {{ plugin.key }} {{ plugin_version | default('') }}
+      {% elif plugin_dir.stat.exists %}
+      {{ plugin.key }} already installed
+      {% elif plugin_zip_url | default('') | length == 0 %}
+      Could not find {{ plugin.key }} release - install manually via Decky store
+      {% else %}
+      Could not install {{ plugin.key }} - check repo URL or install manually via Decky store
+      {% endif %}
+    verbosity: 0
