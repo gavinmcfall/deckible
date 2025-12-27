@@ -35,3 +35,6 @@ Thumbs.db
 # Windows
 *.log
 Desktop.ini
+
+# Repoql
+.repoql/
