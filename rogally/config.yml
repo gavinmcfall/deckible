@@ -1,0 +1,189 @@
+# Allyble Configuration
+# =====================
+# Default settings for ROG Ally X setup.
+#
+# To customize: Create private/config/config.yml and override these values.
+# See README.md for details.
+
+---
+# =============================================================================
+# DESKTOP APPLICATIONS (winget)
+# =============================================================================
+# Apps installed via winget. These are system-wide installations.
+
+install_apps: true
+
+# Communication
+install_discord: false
+install_signal: false
+
+# Media
+install_spotify: false
+install_vlc: false
+
+# Browsers
+install_firefox: false
+install_chrome: false
+install_edge: true  # Pre-installed on Windows, but ensures latest
+
+# Productivity
+install_obs: false
+install_vscode: false
+install_powertoys: true  # Microsoft PowerToys - highly recommended
+
+# Utilities
+install_7zip: true
+install_everything: true  # Fast file search
+
+# Password Manager
+# ----------------
+# Options: "1password", "bitwarden", "keepassxc", "none"
+password_manager: "none"
+
+# =============================================================================
+# GAMING
+# =============================================================================
+# Gaming platforms, launchers, and utilities.
+
+install_gaming: true
+
+# Platforms
+install_steam: true
+install_gog_galaxy: false
+install_epic_launcher: false
+install_ea_app: false
+install_ubisoft_connect: false
+install_battle_net: false
+install_amazon_games: false
+
+# Game Launchers & Managers
+install_playnite: false       # Unified game library manager
+install_launchbox: false      # Game launcher with emulation focus
+
+# Utilities
+install_ds4windows: false     # DualShock/DualSense controller support
+install_hidmanager: false     # HID device management
+
+# Mods & Tweaks
+install_nexus_mods: false     # Vortex mod manager
+install_reshade: false        # Post-processing injector
+
+# =============================================================================
+# GAME STREAMING
+# =============================================================================
+# Stream games from other devices or cloud services.
+
+install_streaming: true
+
+# Local Streaming (from your gaming PC)
+install_moonlight: false      # Stream from PC with Sunshine/GeForce Experience
+install_parsec: false         # Low-latency game streaming
+install_steam_link: false     # Stream from another Steam PC
+
+# Console Streaming
+install_chiaki: false         # PlayStation Remote Play (Chiaki-ng)
+install_greenlight: false     # Xbox streaming to Windows (via browser or app)
+
+# Cloud Gaming
+# Note: Most cloud gaming works via browser, these are dedicated apps
+install_xbox_app: true        # Xbox Cloud Gaming (Game Pass Ultimate)
+install_geforcenow: false     # NVIDIA GeForce NOW
+
+# =============================================================================
+# REMOTE ACCESS
+# =============================================================================
+# Access your device remotely or connect to other devices.
+
+install_remote_access: false
+
+# VPN
+install_tailscale: false      # Zero-config mesh VPN
+
+# Remote Desktop
+install_anydesk: false        # Remote desktop access
+install_rustdesk: false       # Open-source remote desktop
+install_parsec_remote: false  # (Same as parsec above, for remote desktop use)
+
+# =============================================================================
+# EMULATION
+# =============================================================================
+# Retro gaming and emulation.
+
+install_emulation: false
+
+# Frontends
+install_retroarch: false      # Multi-system emulator frontend
+install_emulationstation: false  # EmulationStation Desktop Edition
+
+# Standalone Emulators
+install_dolphin: false        # GameCube/Wii
+install_pcsx2: false          # PlayStation 2
+install_rpcs3: false          # PlayStation 3
+install_yuzu: false           # Nintendo Switch (if available)
+install_ryujinx: false        # Nintendo Switch alternative
+install_cemu: false           # Wii U
+install_duckstation: false    # PlayStation 1
+install_ppsspp: false         # PlayStation Portable
+
+# =============================================================================
+# ROG ALLY SPECIFIC
+# =============================================================================
+# ASUS ROG Ally X specific optimizations and tools.
+
+install_rog_ally: true
+
+# ASUS Software
+install_armoury_crate: true   # ROG Ally control center (usually pre-installed)
+install_myasus: true          # ASUS support app
+
+# Alternative Controllers
+# Handheld Companion is an alternative to Armoury Crate
+install_handheld_companion: false
+
+# Optimization Tools
+install_rtss: false           # RivaTuner Statistics Server (FPS limiter/OSD)
+install_hwinfo: false         # Hardware monitoring
+install_msi_afterburner: false  # GPU tweaking (limited on Ally)
+
+# Power Management
+# Use Windows power plans or Armoury Crate profiles
+configure_power_plans: true
+
+# =============================================================================
+# SYSTEM OPTIMIZATION
+# =============================================================================
+# Windows tweaks for gaming handhelds.
+
+install_optimization: true
+
+# Debloat options (be careful!)
+disable_xbox_game_bar: false  # Xbox Game Bar overlay
+disable_game_dvr: true        # Background game recording
+disable_tips: true            # Windows tips and suggestions
+disable_cortana: false        # Cortana assistant
+
+# Gaming tweaks
+enable_game_mode: true        # Windows Game Mode
+enable_hardware_gpu_scheduling: true  # GPU scheduling optimization
+disable_fullscreen_optimizations: false  # Can help some games
+
+# Display
+configure_hdr: false          # HDR settings (if supported)
+set_refresh_rate: 0           # 0 = don't change, or set to 120, 144, etc.
+
+# Storage
+enable_storage_sense: true    # Auto-cleanup temporary files
+compact_os: false             # Compact OS to save space (takes time)
+
+# =============================================================================
+# PATHS
+# =============================================================================
+# Generally don't need to change these.
+
+# User directories
+user_home: "%USERPROFILE%"
+
+# Game libraries (for emulation, etc.)
+games_path: "D:\\Games"       # Secondary drive if available
+roms_path: "D:\\Emulation\\ROMs"
+bios_path: "D:\\Emulation\\BIOS"

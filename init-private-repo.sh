@@ -1,188 +1,218 @@
 #!/bin/bash
-# Initialize a private deckible configuration repository
-# ======================================================
-# Creates a private GitHub repo with the correct structure for deckible.
+# Bootible - Initialize Private Configuration Repository
+# =======================================================
+# Creates a new Git repository with the structure needed for
+# private Bootible configuration. Push this to your own private
+# GitHub/GitLab repo.
 #
 # Usage:
-#   ./init-private-repo.sh                    # Interactive
-#   ./init-private-repo.sh myusername         # With GitHub username
-#   ./init-private-repo.sh myusername myrepo  # Custom repo name
+#   ./init-private-repo.sh
+#   # Then: cd private && git remote add origin <your-repo-url>
+#   # Then: git push -u origin main
 
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PRIVATE_PATH="$SCRIPT_DIR/private"
+
 echo -e "${BLUE}"
-echo "╔════════════════════════════════════════════╗"
-echo "║   Deckible Private Repo Setup              ║"
-echo "║   Creates your personal config repository  ║"
-echo "╚════════════════════════════════════════════╝"
+echo "╔════════════════════════════════════════════════════════════╗"
+echo "║       Bootible - Initialize Private Repository             ║"
+echo "╚════════════════════════════════════════════════════════════╝"
 echo -e "${NC}"
 
-# Check for gh CLI
-if ! command -v gh &> /dev/null; then
-    echo -e "${RED}Error: GitHub CLI (gh) is required${NC}"
-    echo ""
-    echo "Install it with:"
-    echo "  sudo pacman -S github-cli    # Arch/SteamOS"
-    echo "  brew install gh              # macOS"
-    echo "  sudo apt install gh          # Debian/Ubuntu"
-    echo ""
-    echo "Then authenticate:"
-    echo "  gh auth login"
-    exit 1
+if [[ -d "$PRIVATE_PATH/.git" ]]; then
+    echo -e "${YELLOW}!${NC} Private repo already initialized"
+    exit 0
 fi
 
-# Check gh auth status
-if ! gh auth status &> /dev/null; then
-    echo -e "${YELLOW}GitHub CLI not authenticated${NC}"
-    echo "Running: gh auth login"
-    gh auth login
-fi
+echo -e "${BLUE}→${NC} Creating private repository structure..."
 
-# Get GitHub username
-if [[ -n "$1" ]]; then
-    GH_USER="$1"
-else
-    GH_USER=$(gh api user --jq '.login' 2>/dev/null || echo "")
-    if [[ -z "$GH_USER" ]]; then
-        read -p "GitHub username: " GH_USER
-    else
-        echo -e "GitHub user: ${GREEN}$GH_USER${NC}"
-        read -p "Press Enter to confirm or type a different username: " input
-        [[ -n "$input" ]] && GH_USER="$input"
-    fi
-fi
+# Create directories for each device
+mkdir -p "$PRIVATE_PATH/steamdeck/files/flatpaks"
+mkdir -p "$PRIVATE_PATH/steamdeck/files/appimages"
+mkdir -p "$PRIVATE_PATH/rogally/files/installers"
+mkdir -p "$PRIVATE_PATH/rogally/files/configs"
 
-# Get repo name
-REPO_NAME="${2:-steamdeck}"
-echo -e "Repository name: ${GREEN}$REPO_NAME${NC}"
-read -p "Press Enter to confirm or type a different name: " input
-[[ -n "$input" ]] && REPO_NAME="$input"
+# Create Steam Deck example config
+cat > "$PRIVATE_PATH/steamdeck/config.yml" << 'EOF'
+# My Steam Deck Configuration
+# ============================
+# This file overrides defaults from steamdeck/config.yml
+# Only include settings you want to change.
 
-echo ""
-echo -e "${BLUE}Creating private repository: $GH_USER/$REPO_NAME${NC}"
+---
+# Apps I use
+install_discord: true
+install_spotify: true
+install_vlc: true
 
-# Check if repo already exists
-if gh repo view "$GH_USER/$REPO_NAME" &> /dev/null; then
-    echo -e "${YELLOW}Repository $GH_USER/$REPO_NAME already exists${NC}"
-    read -p "Clone and set up anyway? [y/N] " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        exit 0
-    fi
-else
-    # Create the private repo
-    echo -e "${BLUE}→${NC} Creating private repository..."
-    gh repo create "$REPO_NAME" --private --description "My deckible private configuration" --clone
-    cd "$REPO_NAME"
-fi
+# Password manager
+password_manager: "1password"
+password_manager_install_method: "distrobox"
 
-# Clone if we didn't just create it
-if [[ ! -d "$REPO_NAME" ]] && [[ "$(basename "$PWD")" != "$REPO_NAME" ]]; then
-    echo -e "${BLUE}→${NC} Cloning repository..."
-    gh repo clone "$GH_USER/$REPO_NAME"
-    cd "$REPO_NAME"
-fi
+# Streaming
+install_moonlight: true
+install_chiaki: true
+install_greenlight: true
 
-# Create directory structure
-echo -e "${BLUE}→${NC} Creating directory structure..."
-mkdir -p group_vars files/appimages files/flatpaks
+# Remote access
+install_ssh: true
+install_tailscale: true
+install_remote_desktop: true
+install_sunshine: true
 
-# Create .gitkeep files
-touch files/appimages/.gitkeep files/flatpaks/.gitkeep
+# Emulation
+install_emudeck: true
 
-# Download default config
-echo -e "${BLUE}→${NC} Downloading default configuration..."
-curl -sL "https://raw.githubusercontent.com/gavinmcfall/deckible/main/group_vars/all.yml" -o group_vars/all.yml
+# Gaming
+install_decky: true
+install_proton_tools: true
+
+# All Decky plugins enabled
+decky_plugins:
+  powertools:
+    enabled: true
+  protondb_badges:
+    enabled: true
+  steamgriddb:
+    enabled: true
+  css_loader:
+    enabled: true
+EOF
+
+# Create ROG Ally example config
+cat > "$PRIVATE_PATH/rogally/config.yml" << 'EOF'
+# My ROG Ally X Configuration
+# ============================
+# This file overrides defaults from rogally/config.yml
+# Only include settings you want to change.
+
+---
+# Apps I use
+install_discord: true
+install_spotify: true
+install_vlc: true
+
+# Password manager
+password_manager: "1password"
+
+# Gaming platforms
+install_steam: true
+install_gog_galaxy: true
+install_epic_launcher: true
+
+# Streaming
+install_moonlight: true
+install_chiaki: true
+
+# Remote access
+install_tailscale: true
+
+# Emulation
+install_emulation: true
+install_retroarch: true
+install_dolphin: true
+install_pcsx2: true
+install_duckstation: true
+
+# Paths
+games_path: "D:\\Games"
+roms_path: "D:\\Emulation\\ROMs"
+bios_path: "D:\\Emulation\\BIOS"
+EOF
 
 # Create README
-cat > README.md << 'EOF'
-# Deckible Private Configuration
+cat > "$PRIVATE_PATH/README.md" << 'EOF'
+# Bootible Private Configuration
 
-My private overlay repository for [deckible](https://github.com/gavinmcfall/deckible).
+This is my private overlay repository for [bootible](https://github.com/gavinmcfall/bootible).
 
 ## Structure
 
 ```
-├── group_vars/
-│   └── all.yml          # My personal settings (overrides deckible defaults)
-└── files/
-    ├── appimages/       # EmuDeck EA, etc.
-    └── flatpaks/        # Local .flatpak files
+├── steamdeck/
+│   ├── config.yml           # Steam Deck settings
+│   └── files/
+│       ├── flatpaks/        # Local .flatpak files
+│       └── appimages/       # Local AppImages
+│
+└── rogally/
+    ├── config.yml           # ROG Ally settings
+    └── files/
+        ├── installers/      # Local installers
+        └── configs/         # App config files
 ```
 
 ## Usage
 
-```bash
-git clone https://github.com/gavinmcfall/deckible.git
-cd deckible
-./setup.sh git@github.com:YOUR_USERNAME/steamdeck.git
-ansible-playbook playbook.yml --ask-become-pass
-```
+1. Clone bootible:
+   ```bash
+   git clone https://github.com/gavinmcfall/bootible.git
+   cd bootible
+   ```
 
-## Updating
+2. Link this private repo:
+   ```bash
+   # Linux/Steam Deck
+   ./bootstrap.sh git@github.com:YOUR_USER/bootible-private.git
 
-Edit `group_vars/all.yml`, then:
+   # Windows/ROG Ally (PowerShell)
+   $env:BOOTIBLE_PRIVATE = "https://github.com/YOUR_USER/bootible-private.git"
+   .\bootstrap.ps1
+   ```
 
-```bash
-git add -A && git commit -m "Update config" && git push
-```
+3. Run the setup - it will automatically use your private config!
 EOF
-
-# Update README with actual username
-sed -i "s/YOUR_USERNAME/$GH_USER/g" README.md
 
 # Create .gitignore
-cat > .gitignore << 'EOF'
-# Ansible
-*.retry
+cat > "$PRIVATE_PATH/.gitignore" << 'EOF'
+# Don't commit large binary files
+*.exe
+*.msi
+*.zip
+*.7z
+*.flatpak
+*.AppImage
 
-# OS
-.DS_Store
-Thumbs.db
+# But keep directory structure
+!.gitkeep
+
+# Sensitive files
+*.key
+*.pem
+credentials*
+*secret*
 EOF
 
-# Commit and push
-echo -e "${BLUE}→${NC} Committing and pushing..."
-git add -A
-git commit -m "Initial deckible private configuration"
-git push -u origin main 2>/dev/null || git push -u origin master
+# Add .gitkeep files
+touch "$PRIVATE_PATH/steamdeck/files/flatpaks/.gitkeep"
+touch "$PRIVATE_PATH/steamdeck/files/appimages/.gitkeep"
+touch "$PRIVATE_PATH/rogally/files/installers/.gitkeep"
+touch "$PRIVATE_PATH/rogally/files/configs/.gitkeep"
 
-REPO_PATH="$PWD"
-cd "$SCRIPT_DIR"
+# Initialize git repo
+cd "$PRIVATE_PATH"
+git init
+git add .
+git commit -m "Initial private configuration for bootible"
 
 echo ""
-echo -e "${GREEN}✓ Private repository created successfully!${NC}"
-echo ""
-echo -e "Repository: ${BLUE}https://github.com/$GH_USER/$REPO_NAME${NC}"
-echo -e "Local path: ${BLUE}$REPO_PATH${NC}"
+echo -e "${GREEN}✓${NC} Private repository initialized at: $PRIVATE_PATH"
 echo ""
 echo "Next steps:"
+echo "  1. Create a private repo on GitHub/GitLab"
+echo "  2. cd private"
+echo "  3. git remote add origin <your-repo-url>"
+echo "  4. git push -u origin main"
 echo ""
-echo "  1. Edit your configuration:"
-echo -e "     ${YELLOW}nano $REPO_PATH/group_vars/all.yml${NC}"
+echo "Edit the config files for your devices:"
+echo "  - private/steamdeck/config.yml"
+echo "  - private/rogally/config.yml"
 echo ""
-echo "  2. Add private files (optional):"
-echo -e "     ${YELLOW}cp ~/Downloads/EmuDeck*.desktop.download $REPO_PATH/files/appimages/${NC}"
-echo ""
-echo "  3. Commit your changes:"
-echo -e "     ${YELLOW}cd $REPO_PATH && git add -A && git commit -m 'My config' && git push${NC}"
-echo ""
-echo "  4. Link to deckible:"
-echo -e "     ${YELLOW}cd $SCRIPT_DIR && ./setup.sh git@github.com:$GH_USER/$REPO_NAME.git${NC}"
-echo ""
-
-# Offer to link now
-read -p "Link this repo to deckible now? [Y/n] " -n 1 -r
-echo
-if [[ ! $REPLY =~ ^[Nn]$ ]]; then
-    ./setup.sh "git@github.com:$GH_USER/$REPO_NAME.git"
-fi

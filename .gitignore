@@ -1,13 +1,12 @@
-# Private repository overlay
-# Clone your private repo here: ./setup.sh <your-private-repo-url>
+# Private repository overlay (separate git repo)
 private/
 
-# Local installation files (use private/files/ instead for portability)
-files/flatpaks/*
-files/appimages/*
-!files/flatpaks/.gitkeep
-!files/appimages/.gitkeep
-!files/README.md
+# Local installation files (per-device)
+files/steamdeck/flatpaks/*
+files/steamdeck/appimages/*
+files/rogally/installers/*
+files/rogally/configs/*
+!files/**/.gitkeep
 
 # Ansible
 *.retry
@@ -32,3 +31,7 @@ env/
 # OS
 .DS_Store
 Thumbs.db
+
+# Windows
+*.log
+Desktop.ini
