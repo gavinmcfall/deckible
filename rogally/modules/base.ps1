@@ -1,6 +1,7 @@
 # Base Module - Prerequisites and Setup
 # =====================================
 # This module sets up the foundation for everything else:
+# - Configures hostname and static IP (if specified)
 # - Verifies winget is working
 # - Updates winget sources
 # - Installs essential utilities
@@ -9,6 +10,70 @@
 # Unlike SteamOS, Windows doesn't have an immutable filesystem.
 # We use winget for package management - it's built into Windows 11
 # and handles updates automatically.
+
+# =============================================================================
+# HOSTNAME CONFIGURATION
+# =============================================================================
+$desiredHostname = Get-ConfigValue "hostname" ""
+if ($desiredHostname -and $desiredHostname -ne "") {
+    $currentHostname = $env:COMPUTERNAME
+    if ($currentHostname -ne $desiredHostname) {
+        Write-Status "Setting hostname: $currentHostname → $desiredHostname" "Info"
+        try {
+            Rename-Computer -NewName $desiredHostname -Force -ErrorAction Stop
+            Write-Status "Hostname changed to '$desiredHostname' (restart required)" "Success"
+            $Script:RequiresRestart = $true
+        } catch {
+            Write-Status "Failed to set hostname: $_" "Error"
+        }
+    } else {
+        Write-Status "Hostname already set to '$desiredHostname'" "Success"
+    }
+}
+
+# =============================================================================
+# STATIC IP CONFIGURATION
+# =============================================================================
+$staticIpConfig = Get-ConfigValue "static_ip" @{}
+$staticIpEnabled = $staticIpConfig.enabled -eq $true
+
+if ($staticIpEnabled) {
+    $adapter = $staticIpConfig.adapter
+    $address = $staticIpConfig.address
+    $prefixLength = $staticIpConfig.prefix_length
+    $gateway = $staticIpConfig.gateway
+    $dnsServers = $staticIpConfig.dns | Where-Object { $_ -and $_ -ne "" }
+
+    if ($adapter -and $address -and $gateway) {
+        Write-Status "Configuring static IP on '$adapter'..." "Info"
+        try {
+            # Get the network adapter
+            $netAdapter = Get-NetAdapter -Name $adapter -ErrorAction Stop
+
+            # Remove existing IP configuration
+            $netAdapter | Remove-NetIPAddress -Confirm:$false -ErrorAction SilentlyContinue
+            $netAdapter | Remove-NetRoute -Confirm:$false -ErrorAction SilentlyContinue
+
+            # Set static IP
+            $netAdapter | New-NetIPAddress -IPAddress $address -PrefixLength $prefixLength -DefaultGateway $gateway -ErrorAction Stop
+            Write-Status "Static IP set: $address/$prefixLength (gateway: $gateway)" "Success"
+
+            # Set DNS servers
+            if ($dnsServers -and $dnsServers.Count -gt 0) {
+                Set-DnsClientServerAddress -InterfaceAlias $adapter -ServerAddresses $dnsServers -ErrorAction Stop
+                Write-Status "DNS servers set: $($dnsServers -join ', ')" "Success"
+            }
+        } catch {
+            Write-Status "Failed to configure static IP: $_" "Error"
+        }
+    } else {
+        Write-Status "Static IP enabled but missing required values (adapter, address, gateway)" "Warning"
+    }
+}
+
+# =============================================================================
+# WINGET SETUP
+# =============================================================================
 
 # Verify winget sources are up to date
 Write-Status "Updating winget sources..." "Info"

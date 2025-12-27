@@ -2,6 +2,7 @@
 # ============================================
 # This role sets up the foundation for everything else:
 # - Verifies sudo access is working
+# - Configures hostname and static IP (if specified)
 # - Ensures Flathub repository is configured
 # - Updates Flatpak apps
 #
@@ -29,6 +30,84 @@
         3. Set your password
         4. Run this playbook again
   when: sudo_check.rc != 0
+
+# Hostname Configuration
+# ----------------------
+# Sets the system hostname if specified in config
+
+- name: Get current hostname
+  ansible.builtin.command: hostnamectl --static
+  register: current_hostname
+  changed_when: false
+  when: hostname | default('') | length > 0
+
+- name: Set hostname
+  ansible.builtin.command: hostnamectl set-hostname "{{ hostname }}"
+  become: true
+  when:
+    - hostname | default('') | length > 0
+    - current_hostname.stdout != hostname
+  register: hostname_changed
+
+- name: Display hostname change
+  ansible.builtin.debug:
+    msg: "Hostname changed: {{ current_hostname.stdout }} → {{ hostname }}"
+  when:
+    - hostname_changed is defined
+    - hostname_changed is changed
+
+# Static IP Configuration
+# -----------------------
+# Configures a static IP via NetworkManager if specified
+
+- name: Configure static IP
+  when:
+    - static_ip.enabled | default(false)
+    - static_ip.address | default('') | length > 0
+    - static_ip.gateway | default('') | length > 0
+  block:
+    - name: Get current connection settings
+      ansible.builtin.command: nmcli -g ipv4.method con show "{{ static_ip.connection }}"
+      register: current_ip_method
+      changed_when: false
+      failed_when: false
+
+    - name: Set static IP address
+      ansible.builtin.command: >
+        nmcli con mod "{{ static_ip.connection }}"
+        ipv4.method manual
+        ipv4.addresses "{{ static_ip.address }}"
+        ipv4.gateway "{{ static_ip.gateway }}"
+      become: true
+      when: current_ip_method.stdout != 'manual' or true
+      register: static_ip_set
+
+    - name: Set DNS servers
+      ansible.builtin.command: >
+        nmcli con mod "{{ static_ip.connection }}"
+        ipv4.dns "{{ static_ip.dns | select() | join(',') }}"
+      become: true
+      when:
+        - static_ip.dns | default([]) | select() | list | length > 0
+        - static_ip_set is succeeded
+
+    - name: Restart connection to apply changes
+      ansible.builtin.shell: |
+        nmcli con down "{{ static_ip.connection }}" 2>/dev/null || true
+        sleep 2
+        nmcli con up "{{ static_ip.connection }}"
+      become: true
+      when: static_ip_set is changed
+
+    - name: Display static IP configuration
+      ansible.builtin.debug:
+        msg: |
+          Static IP configured:
+            Connection: {{ static_ip.connection }}
+            Address: {{ static_ip.address }}
+            Gateway: {{ static_ip.gateway }}
+            DNS: {{ static_ip.dns | default([]) | select() | join(', ') }}
+      when: static_ip_set is changed
 
 # Flathub Setup
 # -------------

@@ -1,11 +1,33 @@
-# Allyble Configuration
-# =====================
+# Bootible Configuration - ROG Ally X
+# ====================================
 # Default settings for ROG Ally X setup.
 #
-# To customize: Create private/config/config.yml and override these values.
+# To customize: Create private/rogally/config.yml and override these values.
 # See README.md for details.
 
 ---
+# =============================================================================
+# SYSTEM
+# =============================================================================
+# Hostname and network configuration.
+
+# Hostname - leave empty to keep current hostname
+# Example: "rogally" or "ally-living-room"
+# NOTE: Requires restart to take effect
+hostname: ""
+
+# Static IP configuration
+# Leave enabled: false to use DHCP (default)
+static_ip:
+  enabled: false
+  adapter: "Ethernet"   # Network adapter name (use 'Get-NetAdapter' to list)
+  address: ""           # e.g., "192.168.1.101"
+  prefix_length: 24     # Subnet prefix (24 = 255.255.255.0)
+  gateway: ""           # e.g., "192.168.1.1"
+  dns:                  # DNS servers
+    - ""                # e.g., "8.8.8.8"
+    # - ""              # e.g., "8.8.4.4"
+
 # =============================================================================
 # DESKTOP APPLICATIONS (winget)
 # =============================================================================
