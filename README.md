@@ -82,6 +82,8 @@ git remote add origin git@github.com:YOUR_USER/bootible-private.git
 git push -u origin main
 ```
 
+**Note:** The private repo should use `main` as the default branch. Dry run logs are saved to `logs/<device>/` in your private repo folder.
+
 Then run with your private repo:
 
 ```bash

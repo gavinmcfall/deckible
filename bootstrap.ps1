@@ -410,7 +410,43 @@ function Run-DeviceSetup {
     }
 }
 
+function Save-DryRunLog {
+    # Save dry run transcript to private repo logs folder
+    $privatePath = Join-Path $BootibleDir "private"
+    if (-not (Test-Path $privatePath)) {
+        return
+    }
+
+    $logsPath = Join-Path $privatePath "logs\$Device"
+    if (-not (Test-Path $logsPath)) {
+        New-Item -ItemType Directory -Path $logsPath -Force | Out-Null
+    }
+
+    $logFile = Join-Path $logsPath "$(Get-Date -Format 'yyyy-MM-dd')_dryrun.log"
+
+    try {
+        Stop-Transcript | Out-Null
+    } catch {
+        # Transcript wasn't running
+    }
+
+    if (Test-Path $Script:TranscriptFile) {
+        Copy-Item $Script:TranscriptFile $logFile -Force
+        Remove-Item $Script:TranscriptFile -Force -ErrorAction SilentlyContinue
+        Write-Host ""
+        Write-Status "Dry run log saved to: $logFile" "Success"
+    }
+}
+
 function Main {
+    # Start transcript to capture all output
+    $Script:TranscriptFile = Join-Path $env:TEMP "bootible_$(Get-Date -Format 'yyyyMMdd_HHmmss').log"
+    try {
+        Start-Transcript -Path $Script:TranscriptFile -Force | Out-Null
+    } catch {
+        # Transcript failed to start, continue without it
+    }
+
     Write-Host ""
     Write-Host "+------------------------------------------------------------+" -ForegroundColor Cyan
     Write-Host "|                      Bootible                              |" -ForegroundColor White
@@ -478,6 +514,9 @@ function Main {
         Write-Host ""
         Write-Host "  bootible" -ForegroundColor Green
         Write-Host ""
+
+        # Save dry run log to private repo if available
+        Save-DryRunLog
     } else {
         Write-Host "+------------------------------------------------------------+" -ForegroundColor Green
         Write-Host "|                   Setup Complete!                          |" -ForegroundColor White
@@ -500,6 +539,16 @@ function Main {
     Write-Host "To re-run anytime:" -ForegroundColor Gray
     Write-Host "  bootible" -ForegroundColor Gray
     Write-Host ""
+
+    # Clean up transcript if still running (non-dry-run case)
+    try {
+        Stop-Transcript -ErrorAction SilentlyContinue | Out-Null
+        if (Test-Path $Script:TranscriptFile) {
+            Remove-Item $Script:TranscriptFile -Force -ErrorAction SilentlyContinue
+        }
+    } catch {
+        # Ignore cleanup errors
+    }
 }
 
 # Run
