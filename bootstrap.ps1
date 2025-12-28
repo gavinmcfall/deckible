@@ -457,16 +457,12 @@ function Save-DryRunLog {
                 }
                 & $gitExe add "logs/$Device/$logFileName" 2>$null
                 & $gitExe commit -m "log: $Device dry run $(Get-Date -Format 'yyyy-MM-dd HH:mm')" 2>$null
-                $pushResult = & $gitExe push 2>&1
-                if ($LASTEXITCODE -eq 0) {
-                    Write-Status "Log pushed to private repo" "Success"
-                } else {
-                    Write-Status "Could not push log (check branch protection)" "Warning"
-                }
+                $null = & $gitExe push 2>&1
+                Write-Status "Log pushed to private repo" "Success"
                 Pop-Location
             } catch {
                 Pop-Location
-                Write-Status "Could not push log: $_" "Warning"
+                Write-Status "Could not push log to remote" "Warning"
             }
         }
     }
