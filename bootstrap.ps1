@@ -138,20 +138,44 @@ function Install-Git {
     }
 
     # Fallback: Download from git-scm.com
-    Write-Status "Downloading Git from git-scm.com..." "Info"
+    Write-Status "Downloading Git from git-scm.com (~65MB)..." "Info"
     try {
         $gitInstaller = "$env:TEMP\Git-installer.exe"
         $gitUrl = "https://github.com/git-for-windows/git/releases/download/v2.47.1.windows.1/Git-2.47.1-64-bit.exe"
 
-        Invoke-WebRequest -Uri $gitUrl -OutFile $gitInstaller -UseBasicParsing
+        # Show download progress
+        $ProgressPreference = 'Continue'
+        Write-Host "    Downloading..." -ForegroundColor Gray
+        $webClient = New-Object System.Net.WebClient
+        $webClient.DownloadFile($gitUrl, $gitInstaller)
+        Write-Status "Download complete" "Success"
 
-        Write-Status "Running Git installer (silent)..." "Info"
-        Start-Process -FilePath $gitInstaller -ArgumentList "/VERYSILENT", "/NORESTART", "/NOCANCEL", "/SP-", "/CLOSEAPPLICATIONS", "/RESTARTAPPLICATIONS" -Wait
+        if (-not (Test-Path $gitInstaller)) {
+            throw "Download failed - file not found"
+        }
+
+        Write-Status "Running Git installer..." "Info"
+        Write-Host "    (installer window may appear briefly)" -ForegroundColor Gray
+        $process = Start-Process -FilePath $gitInstaller -ArgumentList "/VERYSILENT", "/NORESTART", "/SP-" -PassThru
+
+        # Wait with timeout
+        $timeout = 120
+        $timer = 0
+        while (-not $process.HasExited -and $timer -lt $timeout) {
+            Start-Sleep -Seconds 5
+            $timer += 5
+            Write-Host "    Installing... ($timer sec)" -ForegroundColor Gray
+        }
+
+        if (-not $process.HasExited) {
+            Write-Status "Installer taking too long, continuing..." "Warning"
+            $process.Kill()
+        }
 
         # Clean up
         Remove-Item $gitInstaller -ErrorAction SilentlyContinue
 
-        Start-Sleep -Seconds 3
+        Start-Sleep -Seconds 2
 
         $gitPath = Find-GitExe
         if ($gitPath) {
