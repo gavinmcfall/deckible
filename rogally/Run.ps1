@@ -260,23 +260,32 @@ function Install-WingetPackage {
         [switch]$Force
     )
 
+    # Check if already installed first (even in DryRun)
+    try {
+        $installed = winget list --id $PackageId --accept-source-agreements 2>$null
+        if ($installed -match $PackageId) {
+            Write-Status "$Name already installed - skipping" "Success"
+            return $true
+        }
+    } catch {
+        # winget list failed, continue with install attempt
+    }
+
     if ($Script:DryRun) {
         Write-Status "[DRY RUN] Would install: $Name ($PackageId)" "Info"
         return $true
     }
 
-    # Check if already installed
-    $installed = winget list --id $PackageId 2>$null
-    if ($installed -match $PackageId) {
-        Write-Status "$Name already installed" "Success"
-        return $true
-    }
-
     Write-Status "Installing $Name..." "Info"
     try {
-        winget install --id $PackageId --accept-source-agreements --accept-package-agreements --silent
-        Write-Status "$Name installed" "Success"
-        return $true
+        $result = winget install --id $PackageId --accept-source-agreements --accept-package-agreements --silent 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            Write-Status "$Name installed" "Success"
+            return $true
+        } else {
+            Write-Status "Failed to install $Name (exit code $LASTEXITCODE)" "Warning"
+            return $false
+        }
     } catch {
         Write-Status "Failed to install $Name : $_" "Error"
         return $false

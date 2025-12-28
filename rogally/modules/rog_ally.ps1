@@ -43,17 +43,16 @@ if ($armouryInstalled) {
 # MyASUS
 if (Get-ConfigValue "install_myasus" $true) {
     $myasusInstalled = Get-AppxPackage | Where-Object { $_.Name -like "*MyASUS*" }
-    if (-not $myasusInstalled) {
-        Write-Status "Installing MyASUS from Microsoft Store..." "Info"
-        try {
-            # Try winget first
-            winget install --id "ASUS.MyASUS" --accept-source-agreements --accept-package-agreements --silent 2>$null
-            Write-Status "MyASUS installed" "Success"
-        } catch {
-            Write-Status "MyASUS: Install from Microsoft Store" "Warning"
-        }
+    if ($myasusInstalled) {
+        Write-Status "MyASUS already installed - skipping" "Success"
+    } elseif ($Script:DryRun) {
+        Write-Status "[DRY RUN] Would install MyASUS" "Info"
     } else {
-        Write-Status "MyASUS is installed" "Success"
+        Write-Status "Installing MyASUS..." "Info"
+        $installed = Install-WingetPackage -PackageId "ASUS.MyASUS" -Name "MyASUS"
+        if (-not $installed) {
+            Write-Status "MyASUS: Install manually from Microsoft Store" "Warning"
+        }
     }
 }
 
@@ -62,15 +61,12 @@ if (Get-ConfigValue "install_myasus" $true) {
 # Open-source alternative for controller configuration
 
 if (Get-ConfigValue "install_handheld_companion" $false) {
-    Write-Status "Installing Handheld Companion..." "Info"
-    # Handheld Companion from GitHub
-    $hcResult = winget search "HandheldCompanion" 2>$null
-    if ($hcResult -match "Companion") {
-        Install-WingetPackage -PackageId "Nefarius.HandheldCompanion" -Name "Handheld Companion"
+    $installed = Install-WingetPackage -PackageId "Nefarius.HandheldCompanion" -Name "Handheld Companion"
+    if ($installed) {
+        Write-Status "Note: Disable Armoury Crate controller features if using Handheld Companion" "Warning"
     } else {
-        Write-Status "Handheld Companion: Download from https://github.com/Valkirie/HandheldCompanion" "Warning"
+        Write-Status "Handheld Companion: Download from https://github.com/Valkirie/HandheldCompanion" "Info"
     }
-    Write-Status "Note: Disable Armoury Crate controller features if using Handheld Companion" "Warning"
 }
 
 # Performance Monitoring Tools
