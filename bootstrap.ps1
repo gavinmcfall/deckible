@@ -32,7 +32,7 @@ $Device = ""
 function Write-Status {
     param([string]$Message, [string]$Type = "Info")
     $colors = @{ "Info" = "Cyan"; "Success" = "Green"; "Warning" = "Yellow"; "Error" = "Red" }
-    $symbols = @{ "Info" = "→"; "Success" = "✓"; "Warning" = "!"; "Error" = "✗" }
+    $symbols = @{ "Info" = "->"; "Success" = "[OK]"; "Warning" = "[!]"; "Error" = "[X]" }
     Write-Host "$($symbols[$Type]) " -ForegroundColor $colors[$Type] -NoNewline
     Write-Host $Message
 }
@@ -412,10 +412,10 @@ function Run-DeviceSetup {
 
 function Main {
     Write-Host ""
-    Write-Host "╔════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-    Write-Host "║                      Bootible                              ║" -ForegroundColor White
-    Write-Host "║         Universal Gaming Device Configuration              ║" -ForegroundColor Gray
-    Write-Host "╚════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+    Write-Host "+------------------------------------------------------------+" -ForegroundColor Cyan
+    Write-Host "|                      Bootible                              |" -ForegroundColor White
+    Write-Host "|         Universal Gaming Device Configuration              |" -ForegroundColor Gray
+    Write-Host "+------------------------------------------------------------+" -ForegroundColor Cyan
     Write-Host ""
 
     # Check admin
@@ -470,18 +470,18 @@ function Main {
 
     Write-Host ""
     if ($DryRun) {
-        Write-Host "╔════════════════════════════════════════════════════════════╗" -ForegroundColor Yellow
-        Write-Host "║                  DRY RUN COMPLETE                          ║" -ForegroundColor White
-        Write-Host "╚════════════════════════════════════════════════════════════╝" -ForegroundColor Yellow
+        Write-Host "+------------------------------------------------------------+" -ForegroundColor Yellow
+        Write-Host "|                  DRY RUN COMPLETE                          |" -ForegroundColor White
+        Write-Host "+------------------------------------------------------------+" -ForegroundColor Yellow
         Write-Host ""
         Write-Host "Review the output above. When ready to apply changes:" -ForegroundColor Yellow
         Write-Host ""
         Write-Host "  bootible" -ForegroundColor Green
         Write-Host ""
     } else {
-        Write-Host "╔════════════════════════════════════════════════════════════╗" -ForegroundColor Green
-        Write-Host "║                   Setup Complete!                          ║" -ForegroundColor White
-        Write-Host "╚════════════════════════════════════════════════════════════╝" -ForegroundColor Green
+        Write-Host "+------------------------------------------------------------+" -ForegroundColor Green
+        Write-Host "|                   Setup Complete!                          |" -ForegroundColor White
+        Write-Host "+------------------------------------------------------------+" -ForegroundColor Green
         Write-Host ""
         Write-Host "Device: $Device" -ForegroundColor Yellow
         Write-Host ""

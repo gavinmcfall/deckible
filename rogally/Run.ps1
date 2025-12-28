@@ -50,10 +50,10 @@ function Write-Status {
         "Error" = "Red"
     }
     $symbols = @{
-        "Info" = "→"
-        "Success" = "✓"
-        "Warning" = "!"
-        "Error" = "✗"
+        "Info" = "->"
+        "Success" = "[OK]"
+        "Warning" = "[!]"
+        "Error" = "[X]"
     }
     Write-Host "$($symbols[$Type]) " -ForegroundColor $colors[$Type] -NoNewline
     Write-Host $Message
@@ -62,9 +62,9 @@ function Write-Status {
 function Write-Header {
     param([string]$Title)
     Write-Host ""
-    Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Blue
+    Write-Host "=================================================================" -ForegroundColor Blue
     Write-Host "  $Title" -ForegroundColor White
-    Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Blue
+    Write-Host "=================================================================" -ForegroundColor Blue
     Write-Host ""
 }
 
