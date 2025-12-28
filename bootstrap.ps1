@@ -75,9 +75,37 @@ function Detect-Device {
     Write-Status "Windows device detected - using ROG Ally configuration" "Info"
 }
 
+$script:GitExe = "git"  # Will be updated to full path if needed
+
+function Find-GitExe {
+    # Check if git is already in PATH
+    $existing = Get-Command git -ErrorAction SilentlyContinue
+    if ($existing) {
+        return $existing.Source
+    }
+
+    # Search common install locations
+    $searchPaths = @(
+        "$env:ProgramFiles\Git\cmd\git.exe",
+        "$env:ProgramFiles\Git\bin\git.exe",
+        "${env:ProgramFiles(x86)}\Git\cmd\git.exe",
+        "$env:LOCALAPPDATA\Programs\Git\cmd\git.exe"
+    )
+
+    foreach ($path in $searchPaths) {
+        if (Test-Path $path) {
+            return $path
+        }
+    }
+
+    return $null
+}
+
 function Install-Git {
-    if (Get-Command git -ErrorAction SilentlyContinue) {
-        Write-Status "Git already installed" "Success"
+    $gitPath = Find-GitExe
+    if ($gitPath) {
+        $script:GitExe = $gitPath
+        Write-Status "Git found at $gitPath" "Success"
         return $true
     }
 
@@ -85,27 +113,18 @@ function Install-Git {
     try {
         winget install --id Git.Git --accept-source-agreements --accept-package-agreements --silent
 
-        # Refresh PATH from registry
-        $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+        # Give it a moment to finish
+        Start-Sleep -Seconds 2
 
-        # Also add common Git paths directly (winget PATH update may not be immediate)
-        $gitPaths = @(
-            "$env:ProgramFiles\Git\cmd",
-            "${env:ProgramFiles(x86)}\Git\cmd",
-            "$env:LOCALAPPDATA\Programs\Git\cmd"
-        )
-        foreach ($gitPath in $gitPaths) {
-            if ((Test-Path $gitPath) -and ($env:Path -notlike "*$gitPath*")) {
-                $env:Path = "$gitPath;$env:Path"
-            }
-        }
-
-        # Verify git is now available
-        if (Get-Command git -ErrorAction SilentlyContinue) {
-            Write-Status "Git installed" "Success"
+        # Find where it installed
+        $gitPath = Find-GitExe
+        if ($gitPath) {
+            $script:GitExe = $gitPath
+            Write-Status "Git installed at $gitPath" "Success"
             return $true
         } else {
-            Write-Status "Git installed but not in PATH. Please close and reopen PowerShell, then run:" "Warning"
+            Write-Status "Git installed but cannot locate git.exe" "Warning"
+            Write-Status "Please close PowerShell, reopen as Admin, and run:" "Warning"
             Write-Host ""
             Write-Host "  irm https://raw.githubusercontent.com/gavinmcfall/bootible/main/bootstrap.ps1 | iex" -ForegroundColor Yellow
             Write-Host ""
@@ -122,14 +141,14 @@ function Clone-Bootible {
         if (Test-Path $BootibleDir) {
             Write-Status "Updating existing bootible..." "Info"
             Push-Location $BootibleDir
-            git pull 2>&1 | Out-Null
+            & $script:GitExe pull 2>&1 | Out-Null
             if ($LASTEXITCODE -ne 0) {
                 throw "git pull failed"
             }
             Pop-Location
         } else {
             Write-Status "Cloning bootible..." "Info"
-            git clone $RepoUrl $BootibleDir 2>&1 | Out-Null
+            & $script:GitExe clone $RepoUrl $BootibleDir 2>&1 | Out-Null
             if ($LASTEXITCODE -ne 0) {
                 throw "git clone failed"
             }
@@ -166,7 +185,7 @@ function Setup-Private {
         try {
             if (Test-Path (Join-Path $privatePath ".git")) {
                 Push-Location $privatePath
-                git pull 2>&1 | Out-Null
+                & $script:GitExe pull 2>&1 | Out-Null
                 if ($LASTEXITCODE -ne 0) {
                     throw "git pull failed"
                 }
@@ -175,7 +194,7 @@ function Setup-Private {
                 if (Test-Path $privatePath) {
                     Remove-Item -Recurse -Force $privatePath
                 }
-                git clone $PrivateRepo $privatePath
+                & $script:GitExe clone $PrivateRepo $privatePath
                 if ($LASTEXITCODE -ne 0) {
                     throw "git clone failed - check your credentials"
                 }
