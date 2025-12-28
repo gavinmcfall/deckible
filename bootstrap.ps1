@@ -206,22 +206,58 @@ function Install-Git {
     return $false
 }
 
+function Run-GitWithProgress {
+    param(
+        [string]$Description,
+        [string[]]$Arguments,
+        [string]$WorkingDir = $null,
+        [int]$TimeoutSeconds = 60
+    )
+
+    Write-Status "$Description..." "Info"
+
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $script:GitExe
+    $psi.Arguments = $Arguments -join ' '
+    $psi.UseShellExecute = $false
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $psi.CreateNoWindow = $true
+    if ($WorkingDir) {
+        $psi.WorkingDirectory = $WorkingDir
+    }
+
+    $process = [System.Diagnostics.Process]::Start($psi)
+    $timer = 0
+
+    while (-not $process.HasExited -and $timer -lt $TimeoutSeconds) {
+        Start-Sleep -Seconds 2
+        $timer += 2
+        Write-Host "    Working... ($timer sec)" -ForegroundColor Gray
+    }
+
+    if (-not $process.HasExited) {
+        $process.Kill()
+        throw "Operation timed out after $TimeoutSeconds seconds"
+    }
+
+    $stdout = $process.StandardOutput.ReadToEnd()
+    $stderr = $process.StandardError.ReadToEnd()
+
+    if ($process.ExitCode -ne 0) {
+        if ($stderr) { Write-Host "    $stderr" -ForegroundColor Red }
+        throw "Git command failed (exit code $($process.ExitCode))"
+    }
+
+    return $true
+}
+
 function Clone-Bootible {
     try {
         if (Test-Path $BootibleDir) {
-            Write-Status "Updating existing bootible..." "Info"
-            Push-Location $BootibleDir
-            & $script:GitExe pull 2>&1 | Out-Null
-            if ($LASTEXITCODE -ne 0) {
-                throw "git pull failed"
-            }
-            Pop-Location
+            Run-GitWithProgress -Description "Updating bootible repo" -Arguments @("pull", "--progress") -WorkingDir $BootibleDir
         } else {
-            Write-Status "Cloning bootible..." "Info"
-            & $script:GitExe clone $RepoUrl $BootibleDir 2>&1 | Out-Null
-            if ($LASTEXITCODE -ne 0) {
-                throw "git clone failed"
-            }
+            Run-GitWithProgress -Description "Cloning bootible repo" -Arguments @("clone", "--progress", $RepoUrl, $BootibleDir)
         }
         Write-Status "Bootible ready at $BootibleDir" "Success"
         return $true
@@ -249,25 +285,18 @@ function Setup-Private {
 
     if ($PrivateRepo) {
         $privatePath = Join-Path $BootibleDir "private"
-        Write-Status "Setting up private configuration..." "Info"
+        Write-Host ""
         Write-Status "Repo: $PrivateRepo" "Info"
 
         try {
             if (Test-Path (Join-Path $privatePath ".git")) {
-                Push-Location $privatePath
-                & $script:GitExe pull 2>&1 | Out-Null
-                if ($LASTEXITCODE -ne 0) {
-                    throw "git pull failed"
-                }
-                Pop-Location
+                Run-GitWithProgress -Description "Updating private config" -Arguments @("pull", "--progress") -WorkingDir $privatePath
             } else {
                 if (Test-Path $privatePath) {
+                    Write-Host "    Removing old private folder..." -ForegroundColor Gray
                     Remove-Item -Recurse -Force $privatePath
                 }
-                & $script:GitExe clone $PrivateRepo $privatePath
-                if ($LASTEXITCODE -ne 0) {
-                    throw "git clone failed - check your credentials"
-                }
+                Run-GitWithProgress -Description "Cloning private config (may prompt for login)" -Arguments @("clone", "--progress", $PrivateRepo, $privatePath) -TimeoutSeconds 120
             }
             Write-Status "Private configuration linked" "Success"
         } catch {
@@ -278,6 +307,8 @@ function Setup-Private {
 }
 
 function Install-BootibleCommand {
+    Write-Status "Installing 'bootible' command..." "Info"
+
     $cmdContent = @"
 @echo off
 powershell -ExecutionPolicy Bypass -Command "& '$BootibleDir\$Device\Run.ps1' %*"
@@ -290,13 +321,14 @@ powershell -ExecutionPolicy Bypass -Command "& '$BootibleDir\$Device\Run.ps1' %*
         Write-Status "Installed 'bootible' command" "Success"
         return
     } catch {
-        # WindowsApps not writable, try bootible directory
+        Write-Host "    WindowsApps not writable, trying fallback..." -ForegroundColor Gray
     }
 
     # Fallback: put in bootible directory and add to PATH
     $cmdPath = Join-Path $BootibleDir "bootible.cmd"
     try {
         Set-Content -Path $cmdPath -Value $cmdContent -Force
+        Write-Host "    Adding to PATH..." -ForegroundColor Gray
         # Add to user PATH if not already there
         $userPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
         if ($userPath -notlike "*$BootibleDir*") {
