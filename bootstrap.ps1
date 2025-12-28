@@ -39,15 +39,21 @@ function Write-Status {
 
 function Sync-SystemTime {
     # Sync system time to fix certificate validation errors on fresh installs
+    Write-Status "Syncing system time..." "Info"
     try {
         $svc = Get-Service w32time -ErrorAction SilentlyContinue
-        if ($svc.Status -ne 'Running') {
-            Start-Service w32time -ErrorAction SilentlyContinue
+        if ($svc -and $svc.Status -ne 'Running') {
+            Write-Host "    Starting time service..." -ForegroundColor Gray
+            Start-Service w32time -ErrorAction Stop
         }
-        w32tm /resync /force 2>&1 | Out-Null
-        Write-Status "System time synced" "Success"
+        $result = w32tm /resync /force 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "    Time sync warning: $result" -ForegroundColor Yellow
+        } else {
+            Write-Status "System time synced" "Success"
+        }
     } catch {
-        # Non-fatal, continue anyway
+        Write-Status "Time sync failed: $_ (continuing anyway)" "Warning"
     }
 }
 
@@ -136,19 +142,32 @@ function Install-Git {
     Write-Status "Installing Git (this may take a minute)..." "Info"
 
     # Try winget first
+    Write-Host "    Trying winget..." -ForegroundColor Gray
     try {
         $result = winget install --id Git.Git --accept-source-agreements --accept-package-agreements --silent --disable-interactivity 2>&1
-        Write-Host $result
+        if ($result) {
+            $result -split "`n" | ForEach-Object {
+                if ($_ -match "error|fail|certificate" ) {
+                    Write-Host "    $_" -ForegroundColor Red
+                } elseif ($_ -match "warning") {
+                    Write-Host "    $_" -ForegroundColor Yellow
+                } else {
+                    Write-Host "    $_" -ForegroundColor Gray
+                }
+            }
+        }
         Start-Sleep -Seconds 3
 
         $gitPath = Find-GitExe
         if ($gitPath) {
             $script:GitExe = $gitPath
-            Write-Status "Git installed at $gitPath" "Success"
+            Write-Status "Git installed via winget at $gitPath" "Success"
             return $true
         }
+        Write-Host "    winget completed but git not found, trying direct download..." -ForegroundColor Yellow
     } catch {
-        Write-Status "winget install failed, trying direct download..." "Warning"
+        Write-Status "winget failed: $_" "Warning"
+        Write-Host "    Trying direct download instead..." -ForegroundColor Yellow
     }
 
     # Fallback: Download from git-scm.com
@@ -215,6 +234,7 @@ function Run-GitWithProgress {
     )
 
     Write-Status "$Description..." "Info"
+    Write-Host "    Command: git $($Arguments -join ' ')" -ForegroundColor DarkGray
 
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = $script:GitExe
@@ -225,11 +245,17 @@ function Run-GitWithProgress {
     $psi.CreateNoWindow = $true
     if ($WorkingDir) {
         $psi.WorkingDirectory = $WorkingDir
+        Write-Host "    Directory: $WorkingDir" -ForegroundColor DarkGray
     }
 
-    $process = [System.Diagnostics.Process]::Start($psi)
-    $timer = 0
+    try {
+        $process = [System.Diagnostics.Process]::Start($psi)
+    } catch {
+        Write-Status "Failed to start git: $_" "Error"
+        throw $_
+    }
 
+    $timer = 0
     while (-not $process.HasExited -and $timer -lt $TimeoutSeconds) {
         Start-Sleep -Seconds 2
         $timer += 2
@@ -237,6 +263,7 @@ function Run-GitWithProgress {
     }
 
     if (-not $process.HasExited) {
+        Write-Status "Operation timed out after $TimeoutSeconds seconds" "Error"
         $process.Kill()
         throw "Operation timed out after $TimeoutSeconds seconds"
     }
@@ -245,8 +272,21 @@ function Run-GitWithProgress {
     $stderr = $process.StandardError.ReadToEnd()
 
     if ($process.ExitCode -ne 0) {
-        if ($stderr) { Write-Host "    $stderr" -ForegroundColor Red }
+        Write-Status "Git failed with exit code $($process.ExitCode)" "Error"
+        if ($stderr) {
+            Write-Host "    Error output:" -ForegroundColor Red
+            $stderr -split "`n" | ForEach-Object { Write-Host "    $_" -ForegroundColor Red }
+        }
+        if ($stdout) {
+            Write-Host "    Standard output:" -ForegroundColor Yellow
+            $stdout -split "`n" | ForEach-Object { Write-Host "    $_" -ForegroundColor Yellow }
+        }
         throw "Git command failed (exit code $($process.ExitCode))"
+    }
+
+    # Show any warnings from stderr (git often writes progress to stderr)
+    if ($stderr -and $stderr -notmatch "^(Cloning|Receiving|Resolving|remote:|Updating)") {
+        Write-Host "    $stderr" -ForegroundColor DarkYellow
     }
 
     return $true
