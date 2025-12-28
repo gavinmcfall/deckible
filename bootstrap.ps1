@@ -411,7 +411,7 @@ function Run-DeviceSetup {
 }
 
 function Save-DryRunLog {
-    # Save dry run transcript to private repo logs folder
+    # Save dry run transcript to private repo logs folder and push to git
     $privatePath = Join-Path $BootibleDir "private"
     if (-not (Test-Path $privatePath)) {
         return
@@ -422,7 +422,8 @@ function Save-DryRunLog {
         New-Item -ItemType Directory -Path $logsPath -Force | Out-Null
     }
 
-    $logFile = Join-Path $logsPath "$(Get-Date -Format 'yyyy-MM-dd')_dryrun.log"
+    $logFileName = "$(Get-Date -Format 'yyyy-MM-dd')_dryrun.log"
+    $logFile = Join-Path $logsPath $logFileName
 
     try {
         Stop-Transcript | Out-Null
@@ -434,7 +435,27 @@ function Save-DryRunLog {
         Copy-Item $Script:TranscriptFile $logFile -Force
         Remove-Item $Script:TranscriptFile -Force -ErrorAction SilentlyContinue
         Write-Host ""
-        Write-Status "Dry run log saved to: $logFile" "Success"
+        Write-Status "Dry run log saved: $logFileName" "Success"
+
+        # Push to git
+        $gitExe = Find-GitExe
+        if ($gitExe) {
+            try {
+                Push-Location $privatePath
+                & $gitExe add "logs/$Device/$logFileName" 2>$null
+                & $gitExe commit -m "log: $Device dry run $(Get-Date -Format 'yyyy-MM-dd HH:mm')" 2>$null
+                $pushResult = & $gitExe push 2>&1
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Status "Log pushed to private repo" "Success"
+                } else {
+                    Write-Status "Could not push log (check branch protection)" "Warning"
+                }
+                Pop-Location
+            } catch {
+                Pop-Location
+                Write-Status "Could not push log: $_" "Warning"
+            }
+        }
     }
 }
 
