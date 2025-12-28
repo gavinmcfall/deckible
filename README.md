@@ -1,25 +1,40 @@
 # Bootible
 
-Universal configuration automation for gaming handhelds.
+Universal configuration automation for gaming handhelds and desktops.
 
 **Supported Devices:**
 - **Steam Deck** (SteamOS/Arch Linux) - Ansible-based
 - **ROG Ally X** (Windows 11) - PowerShell-based
-- More coming soon (Legion Go, Steam Deck OLED, etc.)
+- More coming soon (Bazzite, Ubuntu, Windows Desktop, macOS)
 
 ## Quick Start
 
-### Steam Deck (Linux)
+### Steam Deck (SteamOS)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/gavinmcfall/bootible/main/bootstrap.sh | bash
+curl -fsSL https://raw.githubusercontent.com/gavinmcfall/bootible/main/targets/deck.sh | bash
 ```
 
 ### ROG Ally X (Windows)
 
 Run in PowerShell as Administrator:
 ```powershell
-irm https://raw.githubusercontent.com/gavinmcfall/bootible/main/bootstrap.ps1 | iex
+irm https://raw.githubusercontent.com/gavinmcfall/bootible/main/targets/ally.ps1 | iex
+```
+
+### Other Devices (Coming Soon)
+
+```bash
+# Bazzite
+curl -fsSL https://raw.githubusercontent.com/gavinmcfall/bootible/main/targets/bazzite.sh | bash
+
+# Ubuntu
+curl -fsSL https://raw.githubusercontent.com/gavinmcfall/bootible/main/targets/ubuntu.sh | bash
+```
+
+```powershell
+# Windows Desktop
+irm https://raw.githubusercontent.com/gavinmcfall/bootible/main/targets/windows.ps1 | iex
 ```
 
 ## What It Does
@@ -41,28 +56,45 @@ Bootible automates the setup of gaming handhelds with:
 
 ```
 bootible/
-├── bootstrap.sh          # Linux entry point
-├── bootstrap.ps1         # Windows entry point
+├── targets/
+│   ├── ally.ps1              # ROG Ally bootstrap (Windows)
+│   ├── deck.sh               # Steam Deck bootstrap (SteamOS)
+│   ├── bazzite.sh            # Bazzite (coming soon)
+│   ├── ubuntu.sh             # Ubuntu (coming soon)
+│   ├── windows.ps1           # Windows Desktop (coming soon)
+│   └── common/
+│       ├── common.ps1        # Shared PowerShell functions
+│       └── common.sh         # Shared shell functions
 │
-├── steamdeck/            # Steam Deck configuration
-│   ├── playbook.yml      # Ansible playbook
-│   ├── config.yml        # Default settings
-│   └── roles/            # Ansible roles
+├── config/
+│   ├── rog-ally/             # ROG Ally X configuration
+│   │   ├── Run.ps1           # Main script
+│   │   ├── config.yml        # Default settings
+│   │   ├── modules/          # PowerShell modules
+│   │   └── scripts/          # Install scripts (EmuDeck EA, etc.)
+│   │
+│   ├── steamdeck/            # Steam Deck configuration
+│   │   ├── playbook.yml      # Ansible playbook
+│   │   ├── config.yml        # Default settings
+│   │   ├── roles/            # Ansible roles
+│   │   ├── appimages/        # AppImage files
+│   │   ├── flatpaks/         # Local .flatpak files
+│   │   └── scripts/          # Install scripts
+│   │
+│   ├── bazzite/              # Bazzite (coming soon)
+│   ├── ubuntu/               # Ubuntu (coming soon)
+│   └── windows/              # Windows Desktop (coming soon)
 │
-├── rogally/              # ROG Ally X configuration
-│   ├── Run.ps1           # PowerShell main script
-│   ├── config.yml        # Default settings
-│   └── modules/          # PowerShell modules
-│
-├── private/              # Your private config (separate repo)
-│   ├── steamdeck/
-│   │   └── config.yml
-│   └── rogally/
-│       └── config.yml
-│
-└── files/                # Local files for installation
+└── private/                  # Your private config (separate repo)
+    ├── rog-ally/
+    │   ├── config.yml
+    │   └── scripts/
     ├── steamdeck/
-    └── rogally/
+    │   ├── config.yml
+    │   └── scripts/
+    └── logs/
+        ├── rog-ally/
+        └── steamdeck/
 ```
 
 ## Configuration
@@ -88,11 +120,11 @@ Then run with your private repo:
 
 ```bash
 # Steam Deck
-./bootstrap.sh git@github.com:YOUR_USER/bootible-private.git
+curl -fsSL https://raw.githubusercontent.com/gavinmcfall/bootible/main/targets/deck.sh | bash -s -- git@github.com:YOUR_USER/private.git
 
 # ROG Ally (PowerShell)
-$env:BOOTIBLE_PRIVATE = "https://github.com/YOUR_USER/bootible-private.git"
-.\bootstrap.ps1
+$env:BOOTIBLE_PRIVATE = "https://github.com/YOUR_USER/private.git"
+irm https://raw.githubusercontent.com/gavinmcfall/bootible/main/targets/ally.ps1 | iex
 ```
 
 Your private config overrides the defaults, so you only need to specify what you want to change.
@@ -101,7 +133,7 @@ Your private config overrides the defaults, so you only need to specify what you
 
 ### Steam Deck
 
-See [steamdeck/](steamdeck/) for:
+See [config/steamdeck/](config/steamdeck/) for:
 - Available roles and options
 - Decky plugins configuration
 - EmuDeck setup
@@ -109,19 +141,19 @@ See [steamdeck/](steamdeck/) for:
 
 **Run manually:**
 ```bash
-cd steamdeck
+cd config/steamdeck
 ansible-playbook playbook.yml --ask-become-pass
 ```
 
 **Dry run (preview changes without applying):**
 ```bash
-cd steamdeck
+cd config/steamdeck
 ansible-playbook playbook.yml --check
 ```
 
 ### ROG Ally X
 
-See [rogally/](rogally/) for:
+See [config/rog-ally/](config/rog-ally/) for:
 - Available modules and options
 - Armoury Crate vs Handheld Companion
 - Game streaming setup
@@ -129,13 +161,13 @@ See [rogally/](rogally/) for:
 
 **Run manually:**
 ```powershell
-cd rogally
+cd config/rog-ally
 .\Run.ps1
 ```
 
 **Dry run (preview changes without applying):**
 ```powershell
-cd rogally
+cd config/rog-ally
 .\Run.ps1 -DryRun
 ```
 
@@ -173,19 +205,19 @@ This is useful for:
 
 ```bash
 # Steam Deck
-cd ~/bootible && git pull && ./bootstrap.sh
+cd ~/bootible && git pull && ./targets/deck.sh
 
 # ROG Ally (PowerShell)
-cd $env:USERPROFILE\bootible; git pull; .\bootstrap.ps1
+cd $env:USERPROFILE\bootible; git pull; .\targets\ally.ps1
 ```
 
 ## Adding New Devices
 
 The modular structure makes it easy to add new devices:
 
-1. Create a new directory (e.g., `legiongo/`)
+1. Create a new config directory (e.g., `config/legiongo/`)
 2. Add device-specific configuration and scripts
-3. Update `bootstrap.sh` / `bootstrap.ps1` to detect the device
+3. Create a new bootstrap script in `targets/` (e.g., `targets/legiongo.ps1`)
 4. Submit a PR!
 
 ## License

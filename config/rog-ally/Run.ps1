@@ -17,8 +17,8 @@
 
 .CONFIGURATION
     - Defaults: config.yml
-    - Your settings: ../private/rogally/config.yml (overrides defaults)
-    - Private files: ../private/rogally/files/
+    - Your settings: ../../private/rog-ally/config.yml (overrides defaults)
+    - Private files: ../../private/rog-ally/
 
 .NOTES
     Requires Windows 10/11 and PowerShell 5.1+
@@ -33,7 +33,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$Script:BootibleRoot = Split-Path -Parent $PSScriptRoot
+$Script:BootibleRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $Script:DeviceRoot = $PSScriptRoot
 $Script:Config = @{}
 
@@ -330,8 +330,8 @@ Write-Status "Winget available" "Success"
 # Load configuration
 # Priority: -ConfigFile > private repo > local ~/.config > defaults
 $defaultConfig = Join-Path $Script:DeviceRoot "config.yml"
-$privateConfig = Join-Path $Script:BootibleRoot "private\rogally\config.yml"
-$localConfig = Join-Path $env:USERPROFILE ".config\bootible\rogally\config.yml"
+$privateConfig = Join-Path $Script:BootibleRoot "private\rog-ally\config.yml"
+$localConfig = Join-Path $env:USERPROFILE ".config\bootible\rog-ally\config.yml"
 
 if ($ConfigFile -and (Test-Path $ConfigFile)) {
     $Script:Config = Import-YamlConfig $ConfigFile
@@ -343,7 +343,7 @@ if ($ConfigFile -and (Test-Path $ConfigFile)) {
         Write-Status "Loaded default config" "Info"
     }
 
-    # Merge local config if exists (~/.config/bootible/rogally/config.yml)
+    # Merge local config if exists (~/.config/bootible/rog-ally/config.yml)
     if (Test-Path $localConfig) {
         $localSettings = Import-YamlConfig $localConfig
         $Script:Config = Merge-Configs $Script:Config $localSettings

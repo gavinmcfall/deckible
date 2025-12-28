@@ -2,7 +2,7 @@
 # ====================================
 # Default settings for ROG Ally X setup.
 #
-# To customize: Create private/rogally/config.yml and override these values.
+# To customize: Create private/rog-ally/config.yml and override these values.
 # See README.md for details.
 
 ---
@@ -140,7 +140,7 @@ install_parsec_remote: false  # (Same as parsec above, for remote desktop use)
 install_emulation: false
 
 # EmuDeck - All-in-one emulation setup (recommended)
-# Uses EA/Patreon version if found in private/files/rogally/scripts/
+# Uses EA/Patreon version if found in private/rog-ally/scripts/
 install_emudeck: false
 
 # Frontends

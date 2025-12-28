@@ -11,14 +11,14 @@
 
 .USAGE
     # Preview what will happen (dry run - default):
-    irm https://raw.githubusercontent.com/gavinmcfall/bootible/main/bootstrap.ps1 | iex
+    irm https://raw.githubusercontent.com/gavinmcfall/bootible/main/targets/ally.ps1 | iex
 
     # Run for real after reviewing:
     bootible
 
     # Or skip preview and run immediately:
     $env:BOOTIBLE_RUN = "1"
-    irm https://raw.githubusercontent.com/gavinmcfall/bootible/main/bootstrap.ps1 | iex
+    irm https://raw.githubusercontent.com/gavinmcfall/bootible/main/targets/ally.ps1 | iex
 #>
 
 $ErrorActionPreference = "Stop"
@@ -71,27 +71,27 @@ function Detect-Device {
 
     # ROG Ally detection
     if ($manufacturer -like "*ASUS*" -and $product -like "*ROG Ally*") {
-        $script:Device = "rogally"
+        $script:Device = "rog-ally"
         Write-Status "Detected: ASUS ROG Ally X" "Success"
         return
     }
 
     # Lenovo Legion Go detection
     if ($manufacturer -like "*Lenovo*" -and $product -like "*Legion Go*") {
-        $script:Device = "rogally"  # Use ROG Ally config as base
+        $script:Device = "rog-ally"  # Use ROG Ally config as base
         Write-Status "Detected: Lenovo Legion Go (using ROG Ally config)" "Success"
         return
     }
 
     # MSI Claw detection
     if ($manufacturer -like "*MSI*" -and $product -like "*Claw*") {
-        $script:Device = "rogally"
+        $script:Device = "rog-ally"
         Write-Status "Detected: MSI Claw (using ROG Ally config)" "Success"
         return
     }
 
-    # Default to rogally for any Windows device
-    $script:Device = "rogally"
+    # Default to rog-ally for any Windows device
+    $script:Device = "rog-ally"
     Write-Status "Windows device detected - using ROG Ally configuration" "Info"
 }
 
@@ -353,7 +353,7 @@ function Install-BootibleCommand {
 
     $cmdContent = @"
 @echo off
-powershell -ExecutionPolicy Bypass -Command "& '$BootibleDir\$Device\Run.ps1' %*"
+powershell -ExecutionPolicy Bypass -Command "& '$BootibleDir\config\$Device\Run.ps1' %*"
 "@
 
     # Try WindowsApps first (already in PATH)
@@ -380,7 +380,7 @@ powershell -ExecutionPolicy Bypass -Command "& '$BootibleDir\$Device\Run.ps1' %*
         Write-Status "Installed 'bootible' command (added $BootibleDir to PATH)" "Success"
     } catch {
         Write-Status "Could not install bootible command: $_" "Warning"
-        Write-Status "You can run manually: $BootibleDir\$Device\Run.ps1" "Info"
+        Write-Status "You can run manually: $BootibleDir\config\$Device\Run.ps1" "Info"
     }
 }
 
@@ -393,11 +393,11 @@ function Run-DeviceSetup {
     }
     Write-Host ""
 
-    $devicePath = Join-Path $BootibleDir $Device
+    $devicePath = Join-Path $BootibleDir "config\$Device"
     $runScript = Join-Path $devicePath "Run.ps1"
 
     switch ($Device) {
-        "rogally" {
+        "rog-ally" {
             # Use -ExecutionPolicy Bypass to avoid execution policy errors
             if ($DryRun) {
                 powershell -ExecutionPolicy Bypass -File $runScript -DryRun
@@ -562,7 +562,7 @@ function Main {
         Write-Host "Next steps:" -ForegroundColor Yellow
 
         switch ($Device) {
-            "rogally" {
+            "rog-ally" {
                 Write-Host "  - Restart your device to apply all changes"
                 Write-Host "  - Configure Armoury Crate for performance profiles"
                 Write-Host "  - Set up game streaming apps if installed"

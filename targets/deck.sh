@@ -8,10 +8,10 @@
 #   - ROG Ally X (Windows - redirects to PowerShell)
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/gavinmcfall/bootible/main/bootstrap.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/gavinmcfall/bootible/main/targets/deck.sh | bash
 #
 # Or with a private repo:
-#   curl -fsSL https://raw.githubusercontent.com/gavinmcfall/bootible/main/bootstrap.sh | bash -s -- git@github.com:USER/bootible-private.git
+#   curl -fsSL https://raw.githubusercontent.com/gavinmcfall/bootible/main/targets/deck.sh | bash -s -- git@github.com:USER/bootible-private.git
 
 set -e
 
@@ -40,10 +40,10 @@ detect_device() {
 
     # Check for Windows (shouldn't happen via bash, but just in case)
     if [[ "$OS" == "Windows_NT" ]]; then
-        echo -e "${YELLOW}!${NC} Windows detected - use bootstrap.ps1 instead"
+        echo -e "${YELLOW}!${NC} Windows detected - use targets/ally.ps1 instead"
         echo ""
         echo "Run this in PowerShell:"
-        echo "  irm https://raw.githubusercontent.com/gavinmcfall/bootible/main/bootstrap.ps1 | iex"
+        echo "  irm https://raw.githubusercontent.com/gavinmcfall/bootible/main/targets/ally.ps1 | iex"
         exit 0
     fi
 
@@ -187,7 +187,7 @@ run_playbook() {
     echo -e "${BLUE}→${NC} Running $DEVICE configuration..."
     echo ""
 
-    cd "$BOOTIBLE_DIR/$DEVICE"
+    cd "$BOOTIBLE_DIR/config/$DEVICE"
 
     case $DEVICE in
         steamdeck)
