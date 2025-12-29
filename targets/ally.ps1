@@ -198,8 +198,11 @@ function Run-GitWithProgress {
             Set-Location $WorkingDir
         }
 
-        # Direct invocation - no piping, lets GCM work properly
-        & $script:GitExe @cleanArgs
+        # Run git in separate process to isolate from PowerShell stdin issues
+        # When running via 'irm | iex', stdin is the script content which confuses git
+        $argString = $cleanArgs -join ' '
+        $proc = Start-Process -FilePath $script:GitExe -ArgumentList $argString -WorkingDirectory (Get-Location).Path -Wait -PassThru
+        $LASTEXITCODE = $proc.ExitCode
 
         if ($LASTEXITCODE -ne 0) {
             throw "Git command failed (exit code $LASTEXITCODE)"
