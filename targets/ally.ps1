@@ -207,6 +207,51 @@ function Configure-GitCredentials {
     & $script:GitExe config --global credential.useHttpPath true 2>$null
 }
 
+function Authenticate-GitHub {
+    # Use GitHub CLI for authentication - more reliable than GCM
+    Write-Status "Setting up GitHub authentication..." "Info"
+
+    # Check if gh is installed
+    $ghPath = Get-Command gh -ErrorAction SilentlyContinue
+    if (-not $ghPath) {
+        Write-Host "    Installing GitHub CLI..." -ForegroundColor Gray
+        winget install GitHub.cli --accept-package-agreements --accept-source-agreements --silent 2>$null
+        # Refresh PATH
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+        $ghPath = Get-Command gh -ErrorAction SilentlyContinue
+    }
+
+    if (-not $ghPath) {
+        Write-Status "Could not install GitHub CLI" "Warning"
+        return $false
+    }
+
+    # Check if already authenticated
+    $authStatus = gh auth status 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        Write-Status "Already authenticated with GitHub" "Success"
+        gh auth setup-git 2>$null
+        return $true
+    }
+
+    # Authenticate
+    Write-Host ""
+    Write-Host "    GitHub authentication required for private repo access." -ForegroundColor Yellow
+    Write-Host "    A browser window will open - please log in to GitHub." -ForegroundColor Yellow
+    Write-Host ""
+
+    gh auth login --web --git-protocol https
+    if ($LASTEXITCODE -ne 0) {
+        Write-Status "GitHub authentication failed" "Warning"
+        return $false
+    }
+
+    # Configure git to use gh as credential helper
+    gh auth setup-git 2>$null
+    Write-Status "GitHub authentication complete" "Success"
+    return $true
+}
+
 function Run-GitWithProgress {
     param(
         [string]$Description,
@@ -281,6 +326,12 @@ function Setup-Private {
         Write-Host ""
         Write-Status "Repo: $PrivateRepo" "Info"
 
+        # Authenticate with GitHub CLI first (more reliable than GCM)
+        if (-not (Authenticate-GitHub)) {
+            Write-Status "Skipping private repo (authentication failed)" "Warning"
+            return
+        }
+
         try {
             if (Test-Path (Join-Path $privatePath ".git")) {
                 Run-GitWithProgress -Description "Updating private config" -Arguments @("pull", "--progress") -WorkingDir $privatePath
@@ -289,7 +340,7 @@ function Setup-Private {
                     Write-Host "    Removing old private folder..." -ForegroundColor Gray
                     Remove-Item -Recurse -Force $privatePath
                 }
-                Run-GitWithProgress -Description "Cloning private config (may prompt for login)" -Arguments @("clone", "--progress", $PrivateRepo, $privatePath) -TimeoutSeconds 120
+                Run-GitWithProgress -Description "Cloning private config" -Arguments @("clone", "--progress", $PrivateRepo, $privatePath)
             }
             Write-Status "Private configuration linked" "Success"
         } catch {
