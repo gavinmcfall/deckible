@@ -187,34 +187,22 @@ function Run-GitWithProgress {
 
     Write-Status "$Description..." "Info"
 
+    # Filter out --progress (can cause stderr buffering issues)
+    $cleanArgs = @($Arguments | Where-Object { $_ -ne "--progress" })
+
+    Write-Host "    Running: git $($cleanArgs -join ' ')" -ForegroundColor Gray
+
     $originalLocation = Get-Location
-    if ($WorkingDir) {
-        Set-Location $WorkingDir
-    }
-
     try {
-        # Build argument string (avoid --progress which writes to stderr and can cause issues)
-        $cleanArgs = $Arguments | Where-Object { $_ -ne "--progress" }
-        $argString = ($cleanArgs | ForEach-Object {
-            if ($_ -match '\s') { "`"$_`"" } else { $_ }
-        }) -join ' '
+        if ($WorkingDir) {
+            Set-Location $WorkingDir
+        }
 
-        Write-Host "    Running: git $argString" -ForegroundColor Gray
+        # Direct invocation - no piping, lets GCM work properly
+        & $script:GitExe @cleanArgs
 
-        # Use Start-Process to run git with visible output
-        $psi = New-Object System.Diagnostics.ProcessStartInfo
-        $psi.FileName = $script:GitExe
-        $psi.Arguments = $argString
-        $psi.UseShellExecute = $false
-        $psi.RedirectStandardOutput = $false
-        $psi.RedirectStandardError = $false
-        $psi.WorkingDirectory = if ($WorkingDir) { $WorkingDir } else { (Get-Location).Path }
-
-        $process = [System.Diagnostics.Process]::Start($psi)
-        $process.WaitForExit()
-
-        if ($process.ExitCode -ne 0) {
-            throw "Git command failed (exit code $($process.ExitCode))"
+        if ($LASTEXITCODE -ne 0) {
+            throw "Git command failed (exit code $LASTEXITCODE)"
         }
 
         return $true
