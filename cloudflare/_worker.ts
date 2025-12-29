@@ -1,13 +1,17 @@
 /**
- * Bootible URL Shortener Worker
+ * Bootible - Cloudflare Pages Function
  *
  * Routes:
  *   /rog        -> targets/ally.ps1 (ROG Ally / Windows)
  *   /deck       -> targets/deck.sh  (Steam Deck / SteamOS)
+ *   /docs       -> README rendered as HTML
  *   /           -> Landing page (browser) or help text (CLI)
- *   /logo.png   -> Logo image
- *   /favicon.png -> Favicon
+ *   /*.png      -> Static assets (served by Pages)
  */
+
+interface Env {
+  ASSETS: Fetcher;
+}
 
 const GITHUB_RAW_BASE = 'https://raw.githubusercontent.com/gavinmcfall/bootible/main';
 
@@ -24,28 +28,7 @@ const ROUTES: Record<string, { path: string; description: string }> = {
 
 const README_URL = `${GITHUB_RAW_BASE}/README.md`;
 
-const STATIC_ASSETS: Record<string, { path: string; contentType: string }> = {
-  '/logo.png': {
-    path: '/cloudflare/static/logo.png',
-    contentType: 'image/png',
-  },
-  '/favicon.png': {
-    path: '/cloudflare/static/favicon.png',
-    contentType: 'image/png',
-  },
-  '/steamdeck.png': {
-    path: '/cloudflare/static/steamdeck.png',
-    contentType: 'image/png',
-  },
-  '/rog.png': {
-    path: '/cloudflare/static/rog.png',
-    contentType: 'image/png',
-  },
-};
-
-// Cache durations
 const SCRIPT_CACHE_TTL = 300; // 5 minutes
-const ASSET_CACHE_TTL = 86400; // 24 hours
 
 /**
  * Detect if request is from a browser (vs curl/PowerShell)
@@ -53,8 +36,6 @@ const ASSET_CACHE_TTL = 86400; // 24 hours
 function isBrowser(request: Request): boolean {
   const userAgent = request.headers.get('User-Agent') || '';
   const accept = request.headers.get('Accept') || '';
-
-  // Browsers typically accept text/html and have Mozilla in UA
   return accept.includes('text/html') && userAgent.includes('Mozilla');
 }
 
@@ -64,10 +45,6 @@ function isBrowser(request: Request): boolean {
 function markdownToHtml(md: string): string {
   let html = md;
 
-  // Preserve HTML tags like <details>, <summary>
-  // (they pass through as-is)
-
-  // Code blocks first (protect from other replacements)
   const codeBlocks: string[] = [];
   html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
     const escaped = code.replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -75,7 +52,6 @@ function markdownToHtml(md: string): string {
     return `__CODE_BLOCK_${codeBlocks.length - 1}__`;
   });
 
-  // Inline code (protect from other replacements)
   const inlineCodes: string[] = [];
   html = html.replace(/`([^`]+)`/g, (_, code) => {
     const escaped = code.replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -83,63 +59,39 @@ function markdownToHtml(md: string): string {
     return `__INLINE_CODE_${inlineCodes.length - 1}__`;
   });
 
-  // Tables
   html = html.replace(/^\|(.+)\|\n\|[-| :]+\|\n((?:\|.+\|\n?)+)/gm, (_, header, body) => {
     const headerCells = header.split('|').map((c: string) => c.trim()).filter(Boolean);
     const headerRow = headerCells.map((c: string) => `<th>${c}</th>`).join('');
-
     const bodyRows = body.trim().split('\n').map((row: string) => {
       const cells = row.split('|').map((c: string) => c.trim()).filter(Boolean);
       return `<tr>${cells.map((c: string) => `<td>${c}</td>`).join('')}</tr>`;
     }).join('\n');
-
     return `<table><thead><tr>${headerRow}</tr></thead><tbody>${bodyRows}</tbody></table>`;
   });
 
-  // Blockquotes
   html = html.replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>');
   html = html.replace(/<\/blockquote>\n<blockquote>/g, '\n');
-
-  // Horizontal rules
   html = html.replace(/^---+$/gm, '<hr>');
-
-  // Images/badges
   html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1">');
-
-  // Links
   html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
-
-  // Headers
   html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
   html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
   html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
   html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
-
-  // Bold and italic
   html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-
-  // Unordered lists
   html = html.replace(/^(\s*)[-*] (.+)$/gm, '$1<li>$2</li>');
   html = html.replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>');
-
-  // Numbered lists
   html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
-
-  // Paragraphs - wrap standalone lines
   html = html.replace(/^(?!<[a-z]|__|\s*$)(.+)$/gm, '<p>$1</p>');
 
-  // Restore code blocks
   codeBlocks.forEach((block, i) => {
     html = html.replace(`__CODE_BLOCK_${i}__`, block);
   });
-
-  // Restore inline codes
   inlineCodes.forEach((code, i) => {
     html = html.replace(`__INLINE_CODE_${i}__`, code);
   });
 
-  // Clean up
   html = html.replace(/<p><\/p>/g, '');
   html = html.replace(/<p>\s*<\/p>/g, '');
   html = html.replace(/\n{3,}/g, '\n\n');
@@ -176,10 +128,7 @@ function getDocsPage(readmeHtml: string): string {
       line-height: 1.7;
       padding: 40px 20px;
     }
-    .container {
-      max-width: 800px;
-      margin: 0 auto;
-    }
+    .container { max-width: 800px; margin: 0 auto; }
     .back-link {
       display: inline-block;
       color: var(--accent);
@@ -213,28 +162,11 @@ function getDocsPage(readmeHtml: string): string {
     ul, ol { margin: 12px 0; padding-left: 24px; color: var(--text-secondary); }
     li { margin: 6px 0; }
     strong { color: var(--text-primary); }
-
-    /* Tables */
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin: 16px 0;
-      font-size: 0.9rem;
-    }
-    th, td {
-      border: 1px solid var(--border);
-      padding: 10px 14px;
-      text-align: left;
-    }
-    th {
-      background: var(--bg-card);
-      color: var(--text-primary);
-      font-weight: 600;
-    }
+    table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
+    th, td { border: 1px solid var(--border); padding: 10px 14px; text-align: left; }
+    th { background: var(--bg-card); color: var(--text-primary); font-weight: 600; }
     td { color: var(--text-secondary); }
     tr:nth-child(even) td { background: rgba(22, 27, 34, 0.5); }
-
-    /* Blockquotes */
     blockquote {
       border-left: 4px solid var(--accent);
       background: var(--bg-card);
@@ -244,15 +176,7 @@ function getDocsPage(readmeHtml: string): string {
       color: var(--text-secondary);
       font-style: italic;
     }
-
-    /* Horizontal rules */
-    hr {
-      border: none;
-      border-top: 1px solid var(--border);
-      margin: 32px 0;
-    }
-
-    /* Details/Summary */
+    hr { border: none; border-top: 1px solid var(--border); margin: 32px 0; }
     details {
       background: var(--bg-card);
       border: 1px solid var(--border);
@@ -260,24 +184,11 @@ function getDocsPage(readmeHtml: string): string {
       margin: 16px 0;
       padding: 12px 16px;
     }
-    summary {
-      cursor: pointer;
-      color: var(--accent);
-      font-weight: 500;
-    }
+    summary { cursor: pointer; color: var(--accent); font-weight: 500; }
     summary:hover { text-decoration: underline; }
     details[open] summary { margin-bottom: 12px; }
-
-    /* Badges/images */
-    img {
-      max-width: 100%;
-      height: auto;
-      vertical-align: middle;
-    }
-    img[alt*="badge"], img[alt*="License"], img[alt*="shield"] {
-      height: 20px;
-      margin-right: 8px;
-    }
+    img { max-width: 100%; height: auto; vertical-align: middle; }
+    img[alt*="badge"], img[alt*="License"], img[alt*="shield"] { height: 20px; margin-right: 8px; }
   </style>
 </head>
 <body>
@@ -334,13 +245,7 @@ function getLandingPage(): string {
       --gradient-start: #1a1a2e;
       --gradient-end: #0d1117;
     }
-
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
+    * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
       background: linear-gradient(135deg, var(--gradient-start) 0%, var(--gradient-end) 100%);
@@ -348,18 +253,8 @@ function getLandingPage(): string {
       min-height: 100vh;
       line-height: 1.6;
     }
-
-    .container {
-      max-width: 900px;
-      margin: 0 auto;
-      padding: 40px 20px;
-    }
-
-    .hero {
-      text-align: center;
-      padding: 60px 0 40px;
-    }
-
+    .container { max-width: 900px; margin: 0 auto; padding: 40px 20px; }
+    .hero { text-align: center; padding: 60px 0 40px; }
     .logo {
       width: 140px;
       height: 140px;
@@ -367,12 +262,10 @@ function getLandingPage(): string {
       filter: drop-shadow(0 0 30px var(--accent-glow));
       animation: float 3s ease-in-out infinite;
     }
-
     @keyframes float {
       0%, 100% { transform: translateY(0); }
       50% { transform: translateY(-10px); }
     }
-
     .hero h1 {
       font-size: 3.5rem;
       font-weight: 700;
@@ -382,20 +275,24 @@ function getLandingPage(): string {
       -webkit-text-fill-color: transparent;
       background-clip: text;
     }
-
-    .tagline {
-      font-size: 1.4rem;
-      color: var(--text-secondary);
+    .tagline { font-size: 1.4rem; color: var(--text-secondary); margin-bottom: 40px; }
+    .callout {
+      background: linear-gradient(135deg, rgba(88, 166, 255, 0.1) 0%, rgba(63, 185, 80, 0.1) 100%);
+      border: 1px solid var(--accent);
+      border-radius: 12px;
+      padding: 16px 24px;
       margin-bottom: 40px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
     }
-
-    .devices {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 20px;
-      margin-bottom: 60px;
-    }
-
+    .callout-icon { font-size: 1.5rem; flex-shrink: 0; }
+    .callout-content { flex: 1; }
+    .callout-title { font-weight: 600; margin-bottom: 4px; }
+    .callout-text { color: var(--text-secondary); font-size: 0.9rem; }
+    .callout-link { color: var(--accent); text-decoration: none; font-weight: 500; white-space: nowrap; }
+    .callout-link:hover { text-decoration: underline; }
+    .devices { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-bottom: 60px; }
     .device-card {
       background: var(--bg-card);
       border: 1px solid var(--border);
@@ -405,71 +302,29 @@ function getLandingPage(): string {
       position: relative;
       overflow: hidden;
     }
-
     .device-card::before {
       content: '';
       position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
+      top: 0; left: 0; right: 0;
       height: 3px;
       background: linear-gradient(90deg, var(--accent), var(--success));
       opacity: 0;
       transition: opacity 0.3s ease;
     }
-
     .device-card:hover {
       background: var(--bg-card-hover);
       border-color: var(--accent);
       transform: translateY(-4px);
       box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
     }
-
-    .device-card:hover::before {
-      opacity: 1;
-    }
-
-    .device-header {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 16px;
-    }
-
-    .device-icon {
-      width: 48px;
-      height: 48px;
-      flex-shrink: 0;
-      object-fit: contain;
-    }
-
-    .device-info {
-      flex: 1;
-    }
-
-    .device-name {
-      font-size: 1.2rem;
-      font-weight: 600;
-      margin-bottom: 2px;
-    }
-
-    .device-name .variant {
-      font-size: 0.75rem;
-      font-weight: 400;
-      color: var(--text-muted);
-    }
-
-    .device-platform {
-      color: var(--text-muted);
-      font-size: 0.8rem;
-    }
-
-    .command-wrapper {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
+    .device-card:hover::before { opacity: 1; }
+    .device-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+    .device-icon { width: 48px; height: 48px; flex-shrink: 0; object-fit: contain; }
+    .device-info { flex: 1; }
+    .device-name { font-size: 1.2rem; font-weight: 600; margin-bottom: 2px; }
+    .device-name .variant { font-size: 0.75rem; font-weight: 400; color: var(--text-muted); }
+    .device-platform { color: var(--text-muted); font-size: 0.8rem; }
+    .command-wrapper { display: flex; flex-direction: column; gap: 8px; }
     .copy-btn {
       align-self: flex-end;
       background: var(--bg-dark);
@@ -481,19 +336,8 @@ function getLandingPage(): string {
       font-size: 0.75rem;
       transition: all 0.2s ease;
     }
-
-    .copy-btn:hover {
-      background: var(--accent);
-      color: var(--bg-dark);
-      border-color: var(--accent);
-    }
-
-    .copy-btn.copied {
-      background: var(--success);
-      border-color: var(--success);
-      color: var(--bg-dark);
-    }
-
+    .copy-btn:hover { background: var(--accent); color: var(--bg-dark); border-color: var(--accent); }
+    .copy-btn.copied { background: var(--success); border-color: var(--success); color: var(--bg-dark); }
     .command-block {
       background: var(--bg-dark);
       border: 1px solid var(--border);
@@ -503,35 +347,11 @@ function getLandingPage(): string {
       font-size: 0.85rem;
       overflow-x: auto;
     }
-
-    .command-block code {
-      color: var(--accent);
-      white-space: nowrap;
-    }
-
-    .features {
-      margin-bottom: 60px;
-    }
-
-    .features h2 {
-      text-align: center;
-      font-size: 2rem;
-      margin-bottom: 32px;
-      color: var(--text-primary);
-    }
-
-    .feature-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 16px;
-    }
-
-    @media (max-width: 800px) {
-      .feature-grid {
-        grid-template-columns: repeat(2, 1fr);
-      }
-    }
-
+    .command-block code { color: var(--accent); white-space: nowrap; }
+    .features { margin-bottom: 60px; }
+    .features h2 { text-align: center; font-size: 2rem; margin-bottom: 32px; color: var(--text-primary); }
+    .feature-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+    @media (max-width: 800px) { .feature-grid { grid-template-columns: repeat(2, 1fr); } }
     .feature {
       background: var(--bg-card);
       border: 1px solid var(--border);
@@ -540,26 +360,10 @@ function getLandingPage(): string {
       text-align: center;
       transition: border-color 0.3s ease;
     }
-
-    .feature:hover {
-      border-color: var(--accent);
-    }
-
-    .feature-icon {
-      font-size: 2rem;
-      margin-bottom: 12px;
-    }
-
-    .feature-title {
-      font-weight: 600;
-      margin-bottom: 8px;
-    }
-
-    .feature-desc {
-      color: var(--text-secondary);
-      font-size: 0.9rem;
-    }
-
+    .feature:hover { border-color: var(--accent); }
+    .feature-icon { font-size: 2rem; margin-bottom: 12px; }
+    .feature-title { font-weight: 600; margin-bottom: 8px; }
+    .feature-desc { color: var(--text-secondary); font-size: 0.9rem; }
     .info {
       background: var(--bg-card);
       border: 1px solid var(--border);
@@ -567,55 +371,14 @@ function getLandingPage(): string {
       padding: 32px;
       margin-bottom: 40px;
     }
-
-    .info h3 {
-      font-size: 1.3rem;
-      margin-bottom: 16px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .info p {
-      color: var(--text-secondary);
-      margin-bottom: 12px;
-    }
-
-    .info ul {
-      list-style: none;
-      padding-left: 0;
-    }
-
-    .info li {
-      color: var(--text-secondary);
-      padding: 8px 0;
-      padding-left: 24px;
-      position: relative;
-    }
-
-    .info li::before {
-      content: '✓';
-      position: absolute;
-      left: 0;
-      color: var(--success);
-    }
-
-    footer {
-      text-align: center;
-      padding: 40px 0;
-      border-top: 1px solid var(--border);
-    }
-
-    footer a {
-      color: var(--accent);
-      text-decoration: none;
-      transition: opacity 0.2s ease;
-    }
-
-    footer a:hover {
-      opacity: 0.8;
-    }
-
+    .info h3 { font-size: 1.3rem; margin-bottom: 16px; display: flex; align-items: center; gap: 10px; }
+    .info p { color: var(--text-secondary); margin-bottom: 12px; }
+    .info ul { list-style: none; padding-left: 0; }
+    .info li { color: var(--text-secondary); padding: 8px 0; padding-left: 24px; position: relative; }
+    .info li::before { content: '✓'; position: absolute; left: 0; color: var(--success); }
+    footer { text-align: center; padding: 40px 0; border-top: 1px solid var(--border); }
+    footer a { color: var(--accent); text-decoration: none; transition: opacity 0.2s ease; }
+    footer a:hover { opacity: 0.8; }
     .github-link {
       display: inline-flex;
       align-items: center;
@@ -628,76 +391,13 @@ function getLandingPage(): string {
       font-weight: 500;
       transition: all 0.2s ease;
     }
-
-    .github-link:hover {
-      background: var(--bg-card-hover);
-      border-color: var(--accent);
-    }
-
-    .github-link svg {
-      width: 20px;
-      height: 20px;
-      fill: currentColor;
-    }
-
-    .callout {
-      background: linear-gradient(135deg, rgba(88, 166, 255, 0.1) 0%, rgba(63, 185, 80, 0.1) 100%);
-      border: 1px solid var(--accent);
-      border-radius: 12px;
-      padding: 16px 24px;
-      margin-bottom: 40px;
-      display: flex;
-      align-items: center;
-      gap: 16px;
-    }
-
-    .callout-icon {
-      font-size: 1.5rem;
-      flex-shrink: 0;
-    }
-
-    .callout-content {
-      flex: 1;
-    }
-
-    .callout-title {
-      font-weight: 600;
-      margin-bottom: 4px;
-    }
-
-    .callout-text {
-      color: var(--text-secondary);
-      font-size: 0.9rem;
-    }
-
-    .callout-link {
-      color: var(--accent);
-      text-decoration: none;
-      font-weight: 500;
-      white-space: nowrap;
-    }
-
-    .callout-link:hover {
-      text-decoration: underline;
-    }
-
-    @media (max-width: 700px) {
-      .devices {
-        grid-template-columns: 1fr;
-      }
-    }
-
+    .github-link:hover { background: var(--bg-card-hover); border-color: var(--accent); }
+    .github-link svg { width: 20px; height: 20px; fill: currentColor; }
+    @media (max-width: 700px) { .devices { grid-template-columns: 1fr; } }
     @media (max-width: 600px) {
-      .hero h1 {
-        font-size: 2.5rem;
-      }
-      .tagline {
-        font-size: 1.1rem;
-      }
-      .logo {
-        width: 100px;
-        height: 100px;
-      }
+      .hero h1 { font-size: 2.5rem; }
+      .tagline { font-size: 1.1rem; }
+      .logo { width: 100px; height: 100px; }
     }
   </style>
 </head>
@@ -836,7 +536,7 @@ function getLandingPage(): string {
 }
 
 export default {
-  async fetch(request: Request): Promise<Response> {
+  async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
 
@@ -858,12 +558,7 @@ export default {
     // Handle docs page - fetch README from GitHub and render as HTML
     if (path === '/docs') {
       try {
-        const response = await fetch(README_URL, {
-          cf: {
-            cacheTtl: SCRIPT_CACHE_TTL,
-            cacheEverything: true,
-          },
-        });
+        const response = await fetch(README_URL);
 
         if (!response.ok) {
           return new Response('Failed to load documentation', {
@@ -889,54 +584,13 @@ export default {
       }
     }
 
-    // Handle static assets (images)
-    const asset = STATIC_ASSETS[path];
-    if (asset) {
-      const assetUrl = `${GITHUB_RAW_BASE}${asset.path}`;
-
-      try {
-        const response = await fetch(assetUrl, {
-          cf: {
-            cacheTtl: ASSET_CACHE_TTL,
-            cacheEverything: true,
-          },
-        });
-
-        if (!response.ok) {
-          return new Response('Asset not found', {
-            status: 404,
-            headers: { 'Content-Type': 'text/plain' },
-          });
-        }
-
-        const body = await response.arrayBuffer();
-
-        return new Response(body, {
-          headers: {
-            'Content-Type': asset.contentType,
-            'Cache-Control': `public, max-age=${ASSET_CACHE_TTL}`,
-          },
-        });
-      } catch (error) {
-        return new Response(`Error fetching asset: ${error}`, {
-          status: 502,
-          headers: { 'Content-Type': 'text/plain' },
-        });
-      }
-    }
-
-    // Handle script routes
+    // Handle script routes (proxy from GitHub)
     const route = ROUTES[path];
     if (route) {
       const scriptUrl = `${GITHUB_RAW_BASE}${route.path}`;
 
       try {
-        const response = await fetch(scriptUrl, {
-          cf: {
-            cacheTtl: SCRIPT_CACHE_TTL,
-            cacheEverything: true,
-          },
-        });
+        const response = await fetch(scriptUrl);
 
         if (!response.ok) {
           return new Response(`Failed to fetch script: ${response.status}`, {
@@ -962,10 +616,7 @@ export default {
       }
     }
 
-    // Unknown route
-    return new Response('Not found. Try /rog or /deck', {
-      status: 404,
-      headers: { 'Content-Type': 'text/plain' },
-    });
+    // Static assets - let Pages serve them
+    return env.ASSETS.fetch(request);
   },
 };

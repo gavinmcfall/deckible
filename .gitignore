@@ -39,7 +39,3 @@ Desktop.ini
 # Repoql
 .repoql/
 
-# Cloudflare Worker
-cloudflare/worker/node_modules/
-cloudflare/worker/.wrangler/
-cloudflare/worker/package-lock.json
