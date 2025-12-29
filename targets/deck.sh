@@ -213,6 +213,67 @@ setup_private() {
     fi
 }
 
+# Select config file (if multiple exist in private)
+select_config() {
+    SELECTED_CONFIG=""
+    PRIVATE_DEVICE_DIR="$BOOTIBLE_DIR/private/$DEVICE"
+    DEFAULT_CONFIG="$BOOTIBLE_DIR/config/$DEVICE/config.yml"
+
+    # Check if private device config directory exists
+    if [[ ! -d "$PRIVATE_DEVICE_DIR" ]]; then
+        echo -e "${BLUE}→${NC} Using default configuration"
+        SELECTED_CONFIG="$DEFAULT_CONFIG"
+        return
+    fi
+
+    # Find config files in private directory
+    CONFIG_FILES=()
+    while IFS= read -r -d '' file; do
+        CONFIG_FILES+=("$file")
+    done < <(find "$PRIVATE_DEVICE_DIR" -maxdepth 1 -name "config*.yml" -print0 2>/dev/null | sort -z)
+
+    # If no private configs, use default
+    if [[ ${#CONFIG_FILES[@]} -eq 0 ]]; then
+        echo -e "${BLUE}→${NC} Using default configuration"
+        SELECTED_CONFIG="$DEFAULT_CONFIG"
+        return
+    fi
+
+    # If only one config, use it automatically
+    if [[ ${#CONFIG_FILES[@]} -eq 1 ]]; then
+        SELECTED_CONFIG="${CONFIG_FILES[0]}"
+        local config_name=$(basename "$SELECTED_CONFIG")
+        echo -e "${GREEN}✓${NC} Using config: $config_name"
+        return
+    fi
+
+    # Multiple configs - let user choose
+    echo -e "${CYAN}Multiple configurations found:${NC}"
+    echo ""
+    for i in "${!CONFIG_FILES[@]}"; do
+        local config_name=$(basename "${CONFIG_FILES[$i]}")
+        local num=$((i + 1))
+        echo -e "  ${YELLOW}$num${NC}) $config_name"
+    done
+    echo ""
+
+    while true; do
+        echo -n "Select configuration [1-${#CONFIG_FILES[@]}]: "
+        read -r selection < /dev/tty
+
+        if [[ "$selection" =~ ^[0-9]+$ ]] && [[ "$selection" -ge 1 ]] && [[ "$selection" -le ${#CONFIG_FILES[@]} ]]; then
+            local idx=$((selection - 1))
+            SELECTED_CONFIG="${CONFIG_FILES[$idx]}"
+            local config_name=$(basename "$SELECTED_CONFIG")
+            echo ""
+            echo -e "${GREEN}✓${NC} Selected: $config_name"
+            return
+        else
+            echo -e "${RED}Invalid selection. Please enter a number between 1 and ${#CONFIG_FILES[@]}${NC}"
+        fi
+    done
+}
+
 # Run device-specific playbook
 run_playbook() {
     echo ""
@@ -221,9 +282,21 @@ run_playbook() {
 
     cd "$BOOTIBLE_DIR/config/$DEVICE"
 
+    # Build extra vars for ansible if using private config
+    EXTRA_VARS=""
+    if [[ -n "$SELECTED_CONFIG" && "$SELECTED_CONFIG" != "$BOOTIBLE_DIR/config/$DEVICE/config.yml" ]]; then
+        EXTRA_VARS="-e @$SELECTED_CONFIG"
+        echo -e "${BLUE}→${NC} Config: $(basename "$SELECTED_CONFIG")"
+        echo ""
+    fi
+
     case $DEVICE in
         steamdeck)
-            ansible-playbook playbook.yml --ask-become-pass < /dev/tty
+            if [[ -n "$EXTRA_VARS" ]]; then
+                ansible-playbook playbook.yml $EXTRA_VARS --ask-become-pass < /dev/tty
+            else
+                ansible-playbook playbook.yml --ask-become-pass < /dev/tty
+            fi
             ;;
         *)
             echo -e "${RED}✗${NC} Unknown device type: $DEVICE"
@@ -245,6 +318,8 @@ main() {
     clone_bootible
     echo ""
     setup_private
+    echo ""
+    select_config
     echo ""
     run_playbook
 

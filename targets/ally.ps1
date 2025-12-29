@@ -348,6 +348,63 @@ function Setup-Private {
     }
 }
 
+function Select-Config {
+    $script:SelectedConfig = ""
+    $privateDeviceDir = Join-Path $BootibleDir "private\$Device"
+    $defaultConfig = Join-Path $BootibleDir "config\$Device\config.yml"
+
+    # Check if private device config directory exists
+    if (-not (Test-Path $privateDeviceDir)) {
+        Write-Status "Using default configuration" "Info"
+        $script:SelectedConfig = $defaultConfig
+        return
+    }
+
+    # Find config files in private directory
+    $configFiles = Get-ChildItem -Path $privateDeviceDir -Filter "config*.yml" -File -ErrorAction SilentlyContinue | Sort-Object Name
+
+    # If no private configs, use default
+    if (-not $configFiles -or $configFiles.Count -eq 0) {
+        Write-Status "Using default configuration" "Info"
+        $script:SelectedConfig = $defaultConfig
+        return
+    }
+
+    # If only one config, use it automatically
+    if ($configFiles.Count -eq 1) {
+        $script:SelectedConfig = $configFiles[0].FullName
+        Write-Status "Using config: $($configFiles[0].Name)" "Success"
+        return
+    }
+
+    # Multiple configs - let user choose
+    Write-Host ""
+    Write-Host "Multiple configurations found:" -ForegroundColor Cyan
+    Write-Host ""
+    for ($i = 0; $i -lt $configFiles.Count; $i++) {
+        $num = $i + 1
+        Write-Host "  " -NoNewline
+        Write-Host "$num" -ForegroundColor Yellow -NoNewline
+        Write-Host ") $($configFiles[$i].Name)"
+    }
+    Write-Host ""
+
+    while ($true) {
+        $selection = Read-Host "Select configuration [1-$($configFiles.Count)]"
+
+        if ($selection -match '^\d+$') {
+            $idx = [int]$selection - 1
+            if ($idx -ge 0 -and $idx -lt $configFiles.Count) {
+                $script:SelectedConfig = $configFiles[$idx].FullName
+                Write-Host ""
+                Write-Status "Selected: $($configFiles[$idx].Name)" "Success"
+                return
+            }
+        }
+        Write-Host "Invalid selection. Please enter a number between 1 and $($configFiles.Count)" -ForegroundColor Red
+    }
+}
+
 function Install-BootibleCommand {
     Write-Status "Installing 'bootible' command..." "Info"
 
@@ -391,16 +448,32 @@ function Run-DeviceSetup {
     } else {
         Write-Status "Running $Device configuration..." "Info"
     }
+
+    # Show which config is being used
+    if ($script:SelectedConfig -and $script:SelectedConfig -ne (Join-Path $BootibleDir "config\$Device\config.yml")) {
+        Write-Status "Config: $(Split-Path $script:SelectedConfig -Leaf)" "Info"
+    }
     Write-Host ""
 
     $devicePath = Join-Path $BootibleDir "config\$Device"
     $runScript = Join-Path $devicePath "Run.ps1"
 
+    # Build arguments
+    $arguments = @()
+    if ($DryRun) {
+        $arguments += "-DryRun"
+    }
+    if ($script:SelectedConfig) {
+        $arguments += "-ConfigFile"
+        $arguments += "`"$($script:SelectedConfig)`""
+    }
+
     switch ($Device) {
         "rog-ally" {
             # Use -ExecutionPolicy Bypass to avoid execution policy errors
-            if ($DryRun) {
-                powershell -ExecutionPolicy Bypass -File $runScript -DryRun
+            if ($arguments.Count -gt 0) {
+                $argString = $arguments -join " "
+                powershell -ExecutionPolicy Bypass -Command "& '$runScript' $argString"
             } else {
                 powershell -ExecutionPolicy Bypass -File $runScript
             }
@@ -532,6 +605,9 @@ function Main {
     }
 
     Setup-Private
+    Write-Host ""
+
+    Select-Config
     Write-Host ""
 
     Install-BootibleCommand
