@@ -178,6 +178,16 @@ function Install-Git {
     }
 }
 
+function Configure-GitCredentials {
+    # Ensure Git Credential Manager is configured for GUI prompts
+    if (-not $script:GitExe) { return }
+
+    Write-Host "    Configuring Git credential manager..." -ForegroundColor Gray
+    & $script:GitExe config --global credential.helper manager 2>$null
+    & $script:GitExe config --global credential.guiPrompt true 2>$null
+    & $script:GitExe config --global credential.useHttpPath true 2>$null
+}
+
 function Run-GitWithProgress {
     param(
         [string]$Description,
@@ -198,10 +208,12 @@ function Run-GitWithProgress {
             Set-Location $WorkingDir
         }
 
-        # Run git in separate process to isolate from PowerShell stdin issues
-        # When running via 'irm | iex', stdin is the script content which confuses git
+        # Run git in separate cmd window to fully isolate stdin/stdout
+        # This allows Git Credential Manager to work properly
         $argString = $cleanArgs -join ' '
-        $proc = Start-Process -FilePath $script:GitExe -ArgumentList $argString -WorkingDirectory (Get-Location).Path -Wait -PassThru
+        Write-Host "    (Git window will open - check taskbar if you don't see auth prompt)" -ForegroundColor Yellow
+
+        $proc = Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"`"$script:GitExe`" $argString`"" -WorkingDirectory (Get-Location).Path -Wait -PassThru
         $LASTEXITCODE = $proc.ExitCode
 
         if ($LASTEXITCODE -ne 0) {
@@ -513,6 +525,7 @@ function Main {
     if (-not (Install-Git)) {
         return
     }
+    Configure-GitCredentials
     Write-Host ""
 
     if (-not (Clone-Bootible)) {
