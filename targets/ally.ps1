@@ -208,13 +208,28 @@ function Run-GitWithProgress {
             Set-Location $WorkingDir
         }
 
-        # Run git in separate cmd window to fully isolate stdin/stdout
-        # This allows Git Credential Manager to work properly
-        $argString = $cleanArgs -join ' '
-        Write-Host "    (Git window will open - check taskbar if you don't see auth prompt)" -ForegroundColor Yellow
+        # Create empty file for stdin redirection to prevent git reading from PowerShell's stdin
+        $emptyInput = [System.IO.Path]::GetTempFileName()
 
-        $proc = Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"`"$script:GitExe`" $argString`"" -WorkingDirectory (Get-Location).Path -Wait -PassThru
-        $LASTEXITCODE = $proc.ExitCode
+        # Run git directly - redirect stdin from empty file to isolate from PowerShell
+        $argString = $cleanArgs -join ' '
+        Write-Host "    (A browser window may open for authentication)" -ForegroundColor Yellow
+
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = $script:GitExe
+        $psi.Arguments = $argString
+        $psi.WorkingDirectory = (Get-Location).Path
+        $psi.UseShellExecute = $false
+        $psi.RedirectStandardInput = $true
+        $psi.RedirectStandardOutput = $false
+        $psi.RedirectStandardError = $false
+
+        $process = [System.Diagnostics.Process]::Start($psi)
+        $process.StandardInput.Close()  # Close stdin immediately
+        $process.WaitForExit()
+
+        Remove-Item $emptyInput -Force -ErrorAction SilentlyContinue
+        $LASTEXITCODE = $process.ExitCode
 
         if ($LASTEXITCODE -ne 0) {
             throw "Git command failed (exit code $LASTEXITCODE)"
