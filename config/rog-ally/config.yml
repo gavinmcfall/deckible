@@ -205,6 +205,7 @@ disable_fullscreen_optimizations: false  # Can help some games
 # WARNING: These improve gaming performance but reduce security
 disable_core_isolation: false       # Disable Memory Integrity (improves performance)
 disable_vm_platform: false          # Disable Virtual Machine Platform feature
+disable_bitlocker: false            # Disable BitLocker drive encryption (restart required)
 
 # AMD Display
 disable_amd_varibright: true        # Disable Vari-Bright for better display on battery

@@ -168,6 +168,40 @@ if (Get-ConfigValue "disable_vm_platform" $false) {
     }
 }
 
+# BitLocker Encryption
+# --------------------
+# Disabling BitLocker removes drive encryption for slightly better I/O performance
+# and easier recovery/dual-boot scenarios. Data will no longer be encrypted at rest.
+if (Get-ConfigValue "disable_bitlocker" $false) {
+    Write-Status "Checking BitLocker status..." "Info"
+
+    if (-not $Script:DryRun) {
+        try {
+            $bitlockerVolume = Get-BitLockerVolume -MountPoint "C:" -ErrorAction SilentlyContinue
+            if ($bitlockerVolume) {
+                if ($bitlockerVolume.ProtectionStatus -eq "On" -or $bitlockerVolume.VolumeStatus -eq "FullyEncrypted") {
+                    Write-Status "Disabling BitLocker on C: drive..." "Warning"
+                    Write-Status "This will decrypt your drive - data will no longer be encrypted at rest" "Warning"
+                    Disable-BitLocker -MountPoint "C:" -ErrorAction Stop
+                    Write-Status "BitLocker decryption started (will complete in background, restart required)" "Success"
+                    $Script:RequiresRestart = $true
+                } elseif ($bitlockerVolume.VolumeStatus -eq "DecryptionInProgress") {
+                    Write-Status "BitLocker decryption already in progress" "Info"
+                } else {
+                    Write-Status "BitLocker already disabled on C: drive" "Success"
+                }
+            } else {
+                Write-Status "BitLocker not available or not configured" "Info"
+            }
+        } catch {
+            Write-Status "Could not disable BitLocker: $_" "Warning"
+            Write-Status "You may need to disable it manually via Settings > Privacy & Security > Device encryption" "Info"
+        }
+    } else {
+        Write-Status "[DRY RUN] Would disable BitLocker on C: drive" "Info"
+    }
+}
+
 # =============================================================================
 # AMD DISPLAY SETTINGS
 # =============================================================================
