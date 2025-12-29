@@ -31,9 +31,9 @@ if (-not $env:BOOTIBLE_DIRECT) {
     try {
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
         Invoke-WebRequest -Uri $scriptUrl -OutFile $scriptPath -UseBasicParsing
-        $env:BOOTIBLE_DIRECT = "1"
-        & $scriptPath
-        return  # Don't use 'exit' - it closes the terminal when run via iex
+        # Run with bypass to avoid execution policy issues, pass env var
+        Start-Process -FilePath "powershell.exe" -ArgumentList "-ExecutionPolicy Bypass -NoProfile -Command `"& { `$env:BOOTIBLE_DIRECT='1'; & '$scriptPath' }`"" -Wait -NoNewWindow
+        return
     } catch {
         Write-Host "Failed to download script: $_" -ForegroundColor Red
         return
