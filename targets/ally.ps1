@@ -208,7 +208,7 @@ function Configure-GitCredentials {
 }
 
 function Authenticate-GitHub {
-    # Use GitHub CLI for authentication - more reliable than GCM
+    # Try GitHub CLI for authentication, fall back to GCM
     Write-Status "Setting up GitHub authentication..." "Info"
 
     # Check if gh is installed
@@ -222,8 +222,9 @@ function Authenticate-GitHub {
     }
 
     if (-not $ghPath) {
-        Write-Status "Could not install GitHub CLI" "Warning"
-        return $false
+        # GH CLI not available - GCM will handle auth during git clone
+        Write-Host "    Will use Git Credential Manager for authentication" -ForegroundColor Gray
+        return $true  # Continue - GCM will prompt during clone
     }
 
     # Check if already authenticated
@@ -234,16 +235,16 @@ function Authenticate-GitHub {
         return $true
     }
 
-    # Authenticate
+    # Authenticate with gh
     Write-Host ""
-    Write-Host "    GitHub authentication required for private repo access." -ForegroundColor Yellow
     Write-Host "    A browser window will open - please log in to GitHub." -ForegroundColor Yellow
     Write-Host ""
 
     gh auth login --web --git-protocol https
     if ($LASTEXITCODE -ne 0) {
-        Write-Status "GitHub authentication failed" "Warning"
-        return $false
+        # GH auth failed - GCM will handle it during clone
+        Write-Host "    Will use Git Credential Manager for authentication" -ForegroundColor Gray
+        return $true
     }
 
     # Configure git to use gh as credential helper
