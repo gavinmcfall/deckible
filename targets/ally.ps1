@@ -193,12 +193,28 @@ function Run-GitWithProgress {
     }
 
     try {
-        # Run git directly - allows credential prompts to work
-        & $script:GitExe @Arguments
-        $exitCode = $LASTEXITCODE
+        # Build argument string (avoid --progress which writes to stderr and can cause issues)
+        $cleanArgs = $Arguments | Where-Object { $_ -ne "--progress" }
+        $argString = ($cleanArgs | ForEach-Object {
+            if ($_ -match '\s') { "`"$_`"" } else { $_ }
+        }) -join ' '
 
-        if ($exitCode -ne 0) {
-            throw "Git command failed (exit code $exitCode)"
+        Write-Host "    Running: git $argString" -ForegroundColor Gray
+
+        # Use Start-Process to run git with visible output
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = $script:GitExe
+        $psi.Arguments = $argString
+        $psi.UseShellExecute = $false
+        $psi.RedirectStandardOutput = $false
+        $psi.RedirectStandardError = $false
+        $psi.WorkingDirectory = if ($WorkingDir) { $WorkingDir } else { (Get-Location).Path }
+
+        $process = [System.Diagnostics.Process]::Start($psi)
+        $process.WaitForExit()
+
+        if ($process.ExitCode -ne 0) {
+            throw "Git command failed (exit code $($process.ExitCode))"
         }
 
         return $true
