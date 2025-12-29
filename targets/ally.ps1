@@ -264,28 +264,24 @@ function Run-GitWithProgress {
 
     # Filter out --progress (can cause stderr buffering issues)
     $cleanArgs = @($Arguments | Where-Object { $_ -ne "--progress" })
+    $argString = $cleanArgs -join ' '
 
-    Write-Host "    Running: git $($cleanArgs -join ' ')" -ForegroundColor Gray
+    Write-Host "    Running: git $argString" -ForegroundColor Gray
 
-    $originalLocation = Get-Location
     try {
-        if ($WorkingDir) {
-            Set-Location $WorkingDir
-        }
+        $workDir = if ($WorkingDir) { $WorkingDir } else { (Get-Location).Path }
 
-        # Simple direct invocation - works because script runs as file (not piped)
-        & $script:GitExe @cleanArgs
+        # Use Start-Process -Wait (without -NoNewWindow so GCM can work properly)
+        $proc = Start-Process -FilePath $script:GitExe -ArgumentList $argString -WorkingDirectory $workDir -Wait -PassThru
 
-        if ($LASTEXITCODE -ne 0) {
-            throw "Git command failed (exit code $LASTEXITCODE)"
+        if ($proc.ExitCode -ne 0) {
+            throw "Git command failed (exit code $($proc.ExitCode))"
         }
 
         return $true
     } catch {
         Write-Status "Git failed: $_" "Error"
         throw $_
-    } finally {
-        Set-Location $originalLocation
     }
 }
 
