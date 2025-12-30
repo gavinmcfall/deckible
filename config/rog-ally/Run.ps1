@@ -495,6 +495,27 @@ Write-Host "  Interface:   $($networkInfo.Interface)"
 Write-Host ""
 
 if (-not $Script:DryRun) {
+    # Push any changes to git (useful for sharing logs/state)
+    if (Test-Path (Join-Path $Script:BootibleRoot ".git")) {
+        Write-Status "Pushing changes to git..." "Info"
+        try {
+            Push-Location $Script:BootibleRoot
+            $null = git add -A 2>&1
+            $hasChanges = git status --porcelain 2>&1
+            if ($hasChanges) {
+                $null = git commit -m "auto: post-run state from $env:COMPUTERNAME $(Get-Date -Format 'yyyy-MM-dd HH:mm')" 2>&1
+                $null = git push 2>&1
+                Write-Status "Changes pushed to git" "Success"
+            } else {
+                Write-Status "No changes to push" "Info"
+            }
+            Pop-Location
+        } catch {
+            Write-Status "Could not push to git: $_" "Warning"
+            Pop-Location
+        }
+    }
+
     Write-Host "Next steps:" -ForegroundColor Yellow
     Write-Host "  - Restart your device to apply all changes"
     Write-Host "  - Configure Armoury Crate for performance profiles"
