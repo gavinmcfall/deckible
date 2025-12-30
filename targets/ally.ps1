@@ -828,6 +828,9 @@ function Run-DeviceSetup {
 }
 
 function Main {
+    # Detect device type first (needed for log path)
+    Detect-Device
+
     # Start transcript - save to private logs if available, otherwise temp
     $privatePath = Join-Path $BootibleDir "private"
     $suffix = if ($DryRun) { "_dryrun" } else { "_run" }
@@ -878,8 +881,6 @@ function Main {
         return
     }
     Write-Status "winget available" "Success"
-
-    Detect-Device
     Write-Host ""
 
     if (-not (Install-Git)) {
