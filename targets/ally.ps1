@@ -827,75 +827,25 @@ function Run-DeviceSetup {
     }
 }
 
-function Save-RunLog {
-    param([switch]$DryRun)
-
-    # Save transcript to private repo logs folder and push to git
+function Main {
+    # Start transcript - save to private logs if available, otherwise temp
     $privatePath = Join-Path $BootibleDir "private"
-    if (-not (Test-Path $privatePath)) {
-        return
-    }
-
-    $logsPath = Join-Path $privatePath "logs\$Device"
-    if (-not (Test-Path $logsPath)) {
-        New-Item -ItemType Directory -Path $logsPath -Force | Out-Null
-    }
-
     $suffix = if ($DryRun) { "_dryrun" } else { "_run" }
     $logFileName = "$(Get-Date -Format 'yyyy-MM-dd')$suffix.log"
-    $logFile = Join-Path $logsPath $logFileName
 
-    try {
-        Stop-Transcript | Out-Null
-    } catch {
-        # Transcript wasn't running
-    }
-
-    if (Test-Path $Script:TranscriptFile) {
-        Copy-Item $Script:TranscriptFile $logFile -Force
-        Remove-Item $Script:TranscriptFile -Force -ErrorAction SilentlyContinue
-        Write-Host ""
-        $logType = if ($DryRun) { "Dry run" } else { "Run" }
-        Write-Status "$logType log saved: $logFileName" "Success"
-
-        # Push to git
-        $gitExe = Find-GitExe
-        if ($gitExe) {
-            Push-Location $privatePath
-
-            # Ensure git identity is configured for commit
-            $userName = & $gitExe config user.name 2>$null
-            if (-not $userName) {
-                if ($Script:GitHubUser) {
-                    & $gitExe config user.name $Script:GitHubUser 2>$null
-                    & $gitExe config user.email "$Script:GitHubUser@users.noreply.github.com" 2>$null
-                } else {
-                    & $gitExe config user.name "Bootible" 2>$null
-                    & $gitExe config user.email "bootible@localhost" 2>$null
-                }
-            }
-
-            $runType = if ($DryRun) { "dry run" } else { "run" }
-            & $gitExe add "logs/$Device/$logFileName" 2>$null
-            & $gitExe commit -m "log: $Device $runType $(Get-Date -Format 'yyyy-MM-dd HH:mm')" 2>$null
-
-            # Use cmd.exe to avoid PowerShell stderr handling issues
-            cmd /c "`"$gitExe`" push 2>nul"
-
-            if ($LASTEXITCODE -eq 0) {
-                Write-Status "Log pushed to private repo" "Success"
-            } else {
-                Write-Status "Could not push log (exit code: $LASTEXITCODE)" "Warning"
-            }
-
-            Pop-Location
+    if (Test-Path $privatePath) {
+        $logsPath = Join-Path $privatePath "logs\$Device"
+        if (-not (Test-Path $logsPath)) {
+            New-Item -ItemType Directory -Path $logsPath -Force | Out-Null
         }
+        $Script:TranscriptFile = Join-Path $logsPath $logFileName
+    } else {
+        $Script:TranscriptFile = Join-Path $env:TEMP "bootible_$logFileName"
     }
-}
 
-function Main {
-    # Start transcript to capture all output
-    $Script:TranscriptFile = Join-Path $env:TEMP "bootible_$(Get-Date -Format 'yyyyMMdd_HHmmss').log"
+    # Set env var so Run.ps1 knows transcript is already running
+    $env:BOOTIBLE_TRANSCRIPT = $Script:TranscriptFile
+
     try {
         Start-Transcript -Path $Script:TranscriptFile -Force | Out-Null
     } catch {
@@ -973,9 +923,6 @@ function Main {
         Write-Host ""
         Write-Host "  bootible" -ForegroundColor Green
         Write-Host ""
-
-        # Save dry run log to private repo if available
-        Save-RunLog -DryRun
     } else {
         Write-Host "+------------------------------------------------------------+" -ForegroundColor Green
         Write-Host "|                   Setup Complete!                          |" -ForegroundColor White
@@ -993,11 +940,9 @@ function Main {
             }
         }
         Write-Host ""
-
-        # Save run log to private repo if available
-        Save-RunLog
     }
 
+    # Note: Run.ps1 handles stopping transcript and pushing to git
     Write-Host "To re-run anytime:" -ForegroundColor Gray
     Write-Host "  bootible" -ForegroundColor Gray
     Write-Host ""
