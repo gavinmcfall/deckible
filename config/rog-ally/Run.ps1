@@ -209,7 +209,8 @@ function Ensure-YamlModule {
         Write-Status "Installing powershell-yaml module..." "Info"
         try {
             # Check for network connectivity first
-            $canReachGallery = Test-Connection -ComputerName "www.powershellgallery.com" -Count 1 -Quiet -ErrorAction SilentlyContinue
+            $galleryHost = "www.powershellgallery.com"
+            $canReachGallery = Test-Connection -ComputerName $galleryHost -Count 1 -Quiet -ErrorAction SilentlyContinue
             if (-not $canReachGallery) {
                 Write-Status "Cannot reach PowerShell Gallery (offline or blocked)" "Warning"
                 Write-Host ""
