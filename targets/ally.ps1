@@ -285,10 +285,10 @@ function Show-DeviceCodePopup {
 }
 
 function Authenticate-GitHub {
-    # Try GitHub CLI for authentication (avoids GCM deadlock bug)
+    # Use GitHub's Device Flow API directly for reliable code capture
     Write-Status "Setting up GitHub authentication..." "Info"
 
-    # Check if gh is installed
+    # Check if gh is installed (needed to store token later)
     $ghPath = Get-Command gh -ErrorAction SilentlyContinue
     if (-not $ghPath) {
         Write-Host "    Installing GitHub CLI..." -ForegroundColor Gray
@@ -325,7 +325,7 @@ function Authenticate-GitHub {
         return $false
     }
 
-    # Check if already authenticated (suppress error output)
+    # Check if already authenticated
     Write-Host "    Checking GitHub auth status..." -ForegroundColor Gray
     $origErrorPref = $ErrorActionPreference
     $ErrorActionPreference = "SilentlyContinue"
@@ -339,125 +339,144 @@ function Authenticate-GitHub {
         return $true
     }
 
-    # Not authenticated - need to login with nice UI
+    # Not authenticated - use GitHub Device Flow API directly
     Write-Host ""
     Write-Host "    ============================================" -ForegroundColor Cyan
     Write-Host "    GitHub Login Required" -ForegroundColor Cyan
     Write-Host "    ============================================" -ForegroundColor Cyan
     Write-Host ""
 
-    # Start gh auth in background and capture output to get the device code
-    $ghExe = (Get-Command gh).Source
-    $outFile = "$env:TEMP\gh_auth_out.txt"
-    $errFile = "$env:TEMP\gh_auth_err.txt"
+    # GitHub CLI's OAuth client_id (public, used by gh CLI)
+    $clientId = "178c6fc778ccc68e1d6a"
+    $scope = "repo,read:org,gist"
 
-    # Remove old files
-    Remove-Item $outFile -Force -ErrorAction SilentlyContinue
-    Remove-Item $errFile -Force -ErrorAction SilentlyContinue
+    try {
+        # Request device code from GitHub
+        Write-Host "    Requesting login code..." -ForegroundColor Gray
+        $deviceResponse = Invoke-RestMethod -Uri "https://github.com/login/device/code" -Method Post -Body @{
+            client_id = $clientId
+            scope = $scope
+        } -ContentType "application/x-www-form-urlencoded"
 
-    # Start gh auth login - it writes the code to stderr
-    $env:GH_FORCE_TTY = "1"
-    $psi = New-Object System.Diagnostics.ProcessStartInfo
-    $psi.FileName = $ghExe
-    $psi.Arguments = "auth login --hostname github.com --git-protocol https --web"
-    $psi.UseShellExecute = $false
-    $psi.RedirectStandardOutput = $true
-    $psi.RedirectStandardError = $true
-    $psi.CreateNoWindow = $true
-    $psi.EnvironmentVariables["GH_FORCE_TTY"] = "1"
-
-    $proc = New-Object System.Diagnostics.Process
-    $proc.StartInfo = $psi
-    $proc.Start() | Out-Null
-
-    # Wait for output containing the code (up to 10 seconds)
-    $deviceCode = $null
-    $startTime = Get-Date
-    $allOutput = ""
-
-    while (((Get-Date) - $startTime).TotalSeconds -lt 10 -and -not $deviceCode) {
-        Start-Sleep -Milliseconds 500
-
-        # Read available output
-        if (-not $proc.StandardError.EndOfStream) {
-            $line = $proc.StandardError.ReadLine()
-            if ($line) {
-                $allOutput += "$line`n"
-                # Look for the device code pattern (XXXX-XXXX)
-                if ($line -match '([A-Z0-9]{4}-[A-Z0-9]{4})') {
-                    $deviceCode = $matches[1]
-                }
-            }
+        # Parse response (comes as query string format)
+        $params = @{}
+        $deviceResponse -split '&' | ForEach-Object {
+            $kv = $_ -split '='
+            $params[$kv[0]] = [System.Web.HttpUtility]::UrlDecode($kv[1])
         }
-    }
 
-    if ($deviceCode) {
-        Write-Host "    Device code: " -ForegroundColor White -NoNewline
-        Write-Host $deviceCode -ForegroundColor Cyan
-        Write-Host ""
+        $deviceCode = $params['device_code']
+        $userCode = $params['user_code']
+        $verificationUri = $params['verification_uri']
+        $expiresIn = [int]$params['expires_in']
+        $interval = [int]$params['interval']
+
+        if (-not $userCode) {
+            throw "Failed to get device code from GitHub"
+        }
 
         # Generate QR code URL (pre-fills the code on GitHub)
-        $githubUrl = "https://github.com/login/device?user_code=$deviceCode"
-        $qrApiUrl = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=$([uri]::EscapeDataString($githubUrl))"
+        $githubUrl = "https://github.com/login/device?user_code=$userCode"
+        $qrApiUrl = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=$([uri]::EscapeDataString($githubUrl))"
 
-        # Show popup with code and QR
-        Write-Host "    Opening login popup..." -ForegroundColor Gray
-        $popup = Show-DeviceCodePopup -Code $deviceCode -QrUrl $qrApiUrl
-
-        # Also open browser to GitHub
-        Start-Process $githubUrl
+        # Show popup with code and QR (no browser opening - user uses phone)
+        $popup = Show-DeviceCodePopup -Code $userCode -QrUrl $qrApiUrl
 
         Write-Host ""
-        Write-Host "    Complete login in browser or scan QR with phone." -ForegroundColor White
-        Write-Host "    Click 'I've completed login' when done." -ForegroundColor White
-        Write-Host ""
+        Write-Host "    Scan the QR code with your phone to login." -ForegroundColor White
+        Write-Host "    Waiting for authentication..." -ForegroundColor Gray
 
-        # Wait for popup to close (user clicks button)
-        while ($popup.Visible) {
+        # Poll for completion while popup is open
+        $accessToken = $null
+        $pollStart = Get-Date
+        $maxWait = [Math]::Min($expiresIn, 300)  # Max 5 minutes
+
+        while ($popup.Visible -and ((Get-Date) - $pollStart).TotalSeconds -lt $maxWait) {
             [System.Windows.Forms.Application]::DoEvents()
-            Start-Sleep -Milliseconds 100
+            Start-Sleep -Seconds $interval
+
+            # Poll for token
+            try {
+                $tokenResponse = Invoke-RestMethod -Uri "https://github.com/login/oauth/access_token" -Method Post -Body @{
+                    client_id = $clientId
+                    device_code = $deviceCode
+                    grant_type = "urn:ietf:params:oauth:grant-type:device_code"
+                } -ContentType "application/x-www-form-urlencoded" -ErrorAction SilentlyContinue
+
+                # Parse response
+                $tokenParams = @{}
+                $tokenResponse -split '&' | ForEach-Object {
+                    $kv = $_ -split '='
+                    if ($kv.Count -eq 2) {
+                        $tokenParams[$kv[0]] = [System.Web.HttpUtility]::UrlDecode($kv[1])
+                    }
+                }
+
+                if ($tokenParams['access_token']) {
+                    $accessToken = $tokenParams['access_token']
+                    $popup.Close()
+                    break
+                }
+                # If error is "authorization_pending", keep polling
+            } catch {
+                # Ignore polling errors, keep trying
+            }
         }
+
         $popup.Dispose()
-    } else {
-        # Fallback: couldn't capture code, use old method
-        Write-Host "    Could not capture device code, using fallback method..." -ForegroundColor Yellow
-        Write-Host "    A new window will open with a login code." -ForegroundColor White
-        Write-Host ""
-        Read-Host "    Press Enter to open login window"
 
-        # Kill the background process
-        try { $proc.Kill() } catch {}
+        if ($accessToken) {
+            # Save token to gh CLI
+            Write-Host ""
+            Write-Host "    Saving credentials..." -ForegroundColor Gray
+            $accessToken | & gh auth login --with-token 2>&1 | Out-Null
 
-        # Start in visible window
+            # Verify it worked
+            $ErrorActionPreference = "SilentlyContinue"
+            $null = & gh auth status 2>&1
+            $authWorked = $LASTEXITCODE -eq 0
+            $ErrorActionPreference = $origErrorPref
+
+            if ($authWorked) {
+                & gh auth setup-git 2>&1 | Out-Null
+                Write-Status "GitHub authentication complete" "Success"
+                return $true
+            }
+        }
+
+        Write-Status "Authentication timed out or was cancelled" "Warning"
+        return $false
+
+    } catch {
+        Write-Status "Device flow failed: $_" "Warning"
+
+        # Fallback to manual gh auth
+        Write-Host "    Falling back to manual authentication..." -ForegroundColor Yellow
+        $ghExe = (Get-Command gh).Source
         $proc = Start-Process -FilePath "cmd.exe" -ArgumentList "/c set GH_FORCE_TTY=1 && `"$ghExe`" auth login --hostname github.com --git-protocol https --web" -PassThru
 
         Write-Host ""
-        Read-Host "    Press Enter after completing GitHub login"
-    }
+        Read-Host "    Press Enter after completing GitHub login in the other window"
 
-    # Kill gh process if still running
-    try {
-        if (-not $proc.HasExited) {
-            $proc.Kill()
+        try {
+            if (-not $proc.HasExited) { $proc.Kill() }
+            Get-Process -Name "gh" -ErrorAction SilentlyContinue | Where-Object { $_.StartTime -gt (Get-Date).AddMinutes(-5) } | Stop-Process -Force -ErrorAction SilentlyContinue
+        } catch {}
+
+        $ErrorActionPreference = "SilentlyContinue"
+        $null = & gh auth status 2>&1
+        $authWorked = $LASTEXITCODE -eq 0
+        $ErrorActionPreference = $origErrorPref
+
+        if ($authWorked) {
+            & gh auth setup-git 2>&1 | Out-Null
+            Write-Status "GitHub authentication complete" "Success"
+            return $true
         }
-        Get-Process -Name "gh" -ErrorAction SilentlyContinue | Where-Object { $_.StartTime -gt (Get-Date).AddMinutes(-5) } | Stop-Process -Force -ErrorAction SilentlyContinue
-    } catch {}
 
-    # Verify auth worked
-    $ErrorActionPreference = "SilentlyContinue"
-    $null = & gh auth status 2>&1
-    $authWorked = $LASTEXITCODE -eq 0
-    $ErrorActionPreference = $origErrorPref
-
-    if (-not $authWorked) {
-        Write-Status "GitHub authentication not detected - try again" "Warning"
+        Write-Status "GitHub authentication failed" "Warning"
         return $false
     }
-
-    # Configure git to use gh as credential helper
-    gh auth setup-git 2>$null
-    Write-Status "GitHub authentication complete" "Success"
-    return $true
 }
 
 function Run-GitWithProgress {
