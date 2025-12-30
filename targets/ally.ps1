@@ -265,21 +265,51 @@ function Run-GitWithProgress {
     # Filter out --progress (can cause stderr buffering issues)
     $cleanArgs = @($Arguments | Where-Object { $_ -ne "--progress" })
     $argString = $cleanArgs -join ' '
+    $workDir = if ($WorkingDir) { $WorkingDir } else { (Get-Location).Path }
 
-    Write-Host "    Running: git $argString" -ForegroundColor Gray
+    Write-Host "    [DEBUG] Git exe: $script:GitExe" -ForegroundColor Magenta
+    Write-Host "    [DEBUG] Arguments: $argString" -ForegroundColor Magenta
+    Write-Host "    [DEBUG] WorkDir: $workDir" -ForegroundColor Magenta
 
     try {
-        $workDir = if ($WorkingDir) { $WorkingDir } else { (Get-Location).Path }
+        # Start git without waiting, then monitor it
+        Write-Host "    [DEBUG] Starting git process (no redirect, GCM can show prompts)..." -ForegroundColor Magenta
 
-        # Use Start-Process -Wait (without -NoNewWindow so GCM can work properly)
-        $proc = Start-Process -FilePath $script:GitExe -ArgumentList $argString -WorkingDirectory $workDir -Wait -PassThru
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = $script:GitExe
+        $psi.Arguments = $argString
+        $psi.WorkingDirectory = $workDir
+        $psi.UseShellExecute = $true  # Let Windows handle it - allows GCM GUI
+
+        $proc = [System.Diagnostics.Process]::Start($psi)
+        $procId = $proc.Id
+        Write-Host "    [DEBUG] Git PID: $procId" -ForegroundColor Magenta
+
+        # Wait with status updates
+        $timeout = 300  # 5 minutes
+        $elapsed = 0
+        while (-not $proc.HasExited -and $elapsed -lt $timeout) {
+            Start-Sleep -Seconds 5
+            $elapsed += 5
+            Write-Host "    [DEBUG] Waiting... ($elapsed sec, PID $procId still running)" -ForegroundColor Magenta
+        }
+
+        if (-not $proc.HasExited) {
+            Write-Host "    [DEBUG] Timeout after $timeout seconds!" -ForegroundColor Red
+            $proc.Kill()
+            throw "Git command timed out after $timeout seconds"
+        }
+
+        Write-Host "    [DEBUG] Process exited with code: $($proc.ExitCode)" -ForegroundColor Magenta
 
         if ($proc.ExitCode -ne 0) {
             throw "Git command failed (exit code $($proc.ExitCode))"
         }
 
+        Write-Host "    [DEBUG] Git completed successfully" -ForegroundColor Magenta
         return $true
     } catch {
+        Write-Host "    [DEBUG] Exception: $_" -ForegroundColor Red
         Write-Status "Git failed: $_" "Error"
         throw $_
     }
