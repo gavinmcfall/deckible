@@ -33,6 +33,28 @@ const README_URL = `${GITHUB_RAW_BASE}/README.md`;
 // Cache settings
 const SCRIPT_CACHE_TTL = 300; // 5 minutes - how long to serve cached scripts
 const STALE_CACHE_TTL = 86400; // 24 hours - how long to keep stale cache as fallback
+const FETCH_TIMEOUT_MS = 10000; // 10 second timeout for upstream fetches
+
+/**
+ * Fetch with timeout using AbortController
+ * @param {string} url - URL to fetch
+ * @param {RequestInit} options - Fetch options
+ * @param {number} timeoutMs - Timeout in milliseconds
+ */
+async function fetchWithTimeout(url, options = {}, timeoutMs = FETCH_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    return response;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
 
 /**
  * Compute SHA256 hash of content using Web Crypto API
@@ -598,7 +620,7 @@ export default {
     // Handle docs page - fetch README from GitHub and render as HTML
     if (path === '/docs') {
       try {
-        const response = await fetch(README_URL);
+        const response = await fetchWithTimeout(README_URL);
 
         if (!response.ok) {
           return new Response('Failed to load documentation', {
@@ -655,7 +677,7 @@ export default {
         const cacheBuster = Date.now();
         const scriptUrl = `${GITHUB_RAW_BASE}${route.path}?cb=${cacheBuster}`;
 
-        const response = await fetch(scriptUrl, {
+        const response = await fetchWithTimeout(scriptUrl, {
           headers: { 'Cache-Control': 'no-cache' },
         });
 
