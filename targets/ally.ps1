@@ -268,21 +268,42 @@ function Authenticate-GitHub {
     Write-Host "    GitHub Login Required" -ForegroundColor Cyan
     Write-Host "    ============================================" -ForegroundColor Cyan
     Write-Host ""
-    Write-Host "    1. Press Enter below" -ForegroundColor White
-    Write-Host "    2. A code like XXXX-XXXX will appear" -ForegroundColor White
-    Write-Host "    3. Go to: " -ForegroundColor White -NoNewline
-    Write-Host "https://github.com/login/device" -ForegroundColor Yellow
-    Write-Host "    4. Enter the code and authorize" -ForegroundColor White
+    Write-Host "    A new window will open with a login code." -ForegroundColor White
+    Write-Host "    Complete the GitHub login, then return here." -ForegroundColor White
     Write-Host ""
-    Read-Host "    Press Enter to start login"
+    Read-Host "    Press Enter to open login window"
 
-    # Run gh auth
+    # Run gh auth with GH_FORCE_TTY to enable proper interactive behavior in scripts
+    # Start cmd with environment variable set, which runs gh
+    $ghExe = (Get-Command gh).Source
+    $proc = Start-Process -FilePath "cmd.exe" -ArgumentList "/c set GH_FORCE_TTY=1 && `"$ghExe`" auth login --hostname github.com --git-protocol https --web" -PassThru
+
     Write-Host ""
-    gh auth login --hostname github.com --git-protocol https --web
-    $authResult = $LASTEXITCODE
+    Write-Host "    ============================================" -ForegroundColor Green
+    Write-Host "    After completing GitHub login in browser," -ForegroundColor Green
+    Write-Host "    press Enter here to continue." -ForegroundColor Green
+    Write-Host "    (You can close the other window if it's stuck)" -ForegroundColor Gray
+    Write-Host "    ============================================" -ForegroundColor Green
+    Write-Host ""
+    Read-Host "    Press Enter after completing GitHub login"
 
-    if ($authResult -ne 0) {
-        Write-Status "GitHub authentication failed (exit code: $authResult)" "Warning"
+    # Kill process if still running
+    try {
+        if (-not $proc.HasExited) {
+            Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+        }
+        # Also kill any lingering gh processes from this auth
+        Get-Process -Name "gh" -ErrorAction SilentlyContinue | Where-Object { $_.StartTime -gt (Get-Date).AddMinutes(-5) } | Stop-Process -Force -ErrorAction SilentlyContinue
+    } catch {}
+
+    # Verify auth worked
+    $ErrorActionPreference = "SilentlyContinue"
+    $null = & gh auth status 2>&1
+    $authWorked = $LASTEXITCODE -eq 0
+    $ErrorActionPreference = $origErrorPref
+
+    if (-not $authWorked) {
+        Write-Status "GitHub authentication not detected - try again" "Warning"
         return $false
     }
 
