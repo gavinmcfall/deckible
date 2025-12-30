@@ -207,6 +207,83 @@ function Configure-GitCredentials {
     & $script:GitExe config --global credential.useHttpPath true 2>$null
 }
 
+function Show-DeviceCodePopup {
+    param([string]$Code, [string]$QrUrl)
+
+    Add-Type -AssemblyName System.Windows.Forms
+    Add-Type -AssemblyName System.Drawing
+
+    $form = New-Object System.Windows.Forms.Form
+    $form.Text = "GitHub Login"
+    $form.Size = New-Object System.Drawing.Size(500, 400)
+    $form.StartPosition = "CenterScreen"
+    $form.FormBorderStyle = "FixedDialog"
+    $form.MaximizeBox = $false
+    $form.TopMost = $true
+    $form.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)
+
+    # Title
+    $title = New-Object System.Windows.Forms.Label
+    $title.Text = "Enter this code on GitHub:"
+    $title.Font = New-Object System.Drawing.Font("Segoe UI", 14, [System.Drawing.FontStyle]::Regular)
+    $title.ForeColor = [System.Drawing.Color]::White
+    $title.AutoSize = $true
+    $title.Location = New-Object System.Drawing.Point(120, 20)
+    $form.Controls.Add($title)
+
+    # Large code display
+    $codeLabel = New-Object System.Windows.Forms.Label
+    $codeLabel.Text = $Code
+    $codeLabel.Font = New-Object System.Drawing.Font("Consolas", 48, [System.Drawing.FontStyle]::Bold)
+    $codeLabel.ForeColor = [System.Drawing.Color]::FromArgb(88, 166, 255)
+    $codeLabel.AutoSize = $true
+    $codeLabel.Location = New-Object System.Drawing.Point(80, 60)
+    $form.Controls.Add($codeLabel)
+
+    # Instructions
+    $instructions = New-Object System.Windows.Forms.Label
+    $instructions.Text = "Or scan the QR code with your phone:"
+    $instructions.Font = New-Object System.Drawing.Font("Segoe UI", 11, [System.Drawing.FontStyle]::Regular)
+    $instructions.ForeColor = [System.Drawing.Color]::LightGray
+    $instructions.AutoSize = $true
+    $instructions.Location = New-Object System.Drawing.Point(120, 140)
+    $form.Controls.Add($instructions)
+
+    # QR Code image
+    $qrPictureBox = New-Object System.Windows.Forms.PictureBox
+    $qrPictureBox.Size = New-Object System.Drawing.Size(150, 150)
+    $qrPictureBox.Location = New-Object System.Drawing.Point(165, 170)
+    $qrPictureBox.SizeMode = "Zoom"
+    $qrPictureBox.BackColor = [System.Drawing.Color]::White
+
+    try {
+        $webClient = New-Object System.Net.WebClient
+        $qrImageBytes = $webClient.DownloadData($QrUrl)
+        $ms = New-Object System.IO.MemoryStream(, $qrImageBytes)
+        $qrPictureBox.Image = [System.Drawing.Image]::FromStream($ms)
+    } catch {
+        # If QR fails, just show placeholder text
+        $qrPictureBox.BackColor = [System.Drawing.Color]::Gray
+    }
+    $form.Controls.Add($qrPictureBox)
+
+    # Close button
+    $closeButton = New-Object System.Windows.Forms.Button
+    $closeButton.Text = "I've completed login"
+    $closeButton.Font = New-Object System.Drawing.Font("Segoe UI", 11, [System.Drawing.FontStyle]::Regular)
+    $closeButton.Size = New-Object System.Drawing.Size(200, 40)
+    $closeButton.Location = New-Object System.Drawing.Point(145, 330)
+    $closeButton.BackColor = [System.Drawing.Color]::FromArgb(46, 160, 67)
+    $closeButton.ForeColor = [System.Drawing.Color]::White
+    $closeButton.FlatStyle = "Flat"
+    $closeButton.Add_Click({ $form.Close() })
+    $form.Controls.Add($closeButton)
+
+    # Show non-blocking (will be closed by button or externally)
+    $form.Show()
+    return $form
+}
+
 function Authenticate-GitHub {
     # Try GitHub CLI for authentication (avoids GCM deadlock bug)
     Write-Status "Setting up GitHub authentication..." "Info"
@@ -262,37 +339,107 @@ function Authenticate-GitHub {
         return $true
     }
 
-    # Not authenticated - need to login
+    # Not authenticated - need to login with nice UI
     Write-Host ""
     Write-Host "    ============================================" -ForegroundColor Cyan
     Write-Host "    GitHub Login Required" -ForegroundColor Cyan
     Write-Host "    ============================================" -ForegroundColor Cyan
     Write-Host ""
-    Write-Host "    A new window will open with a login code." -ForegroundColor White
-    Write-Host "    Complete the GitHub login, then return here." -ForegroundColor White
-    Write-Host ""
-    Read-Host "    Press Enter to open login window"
 
-    # Run gh auth with GH_FORCE_TTY to enable proper interactive behavior in scripts
-    # Start cmd with environment variable set, which runs gh
+    # Start gh auth in background and capture output to get the device code
     $ghExe = (Get-Command gh).Source
-    $proc = Start-Process -FilePath "cmd.exe" -ArgumentList "/c set GH_FORCE_TTY=1 && `"$ghExe`" auth login --hostname github.com --git-protocol https --web" -PassThru
+    $outFile = "$env:TEMP\gh_auth_out.txt"
+    $errFile = "$env:TEMP\gh_auth_err.txt"
 
-    Write-Host ""
-    Write-Host "    ============================================" -ForegroundColor Green
-    Write-Host "    After completing GitHub login in browser," -ForegroundColor Green
-    Write-Host "    press Enter here to continue." -ForegroundColor Green
-    Write-Host "    (You can close the other window if it's stuck)" -ForegroundColor Gray
-    Write-Host "    ============================================" -ForegroundColor Green
-    Write-Host ""
-    Read-Host "    Press Enter after completing GitHub login"
+    # Remove old files
+    Remove-Item $outFile -Force -ErrorAction SilentlyContinue
+    Remove-Item $errFile -Force -ErrorAction SilentlyContinue
 
-    # Kill process if still running
+    # Start gh auth login - it writes the code to stderr
+    $env:GH_FORCE_TTY = "1"
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $ghExe
+    $psi.Arguments = "auth login --hostname github.com --git-protocol https --web"
+    $psi.UseShellExecute = $false
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $psi.CreateNoWindow = $true
+    $psi.EnvironmentVariables["GH_FORCE_TTY"] = "1"
+
+    $proc = New-Object System.Diagnostics.Process
+    $proc.StartInfo = $psi
+    $proc.Start() | Out-Null
+
+    # Wait for output containing the code (up to 10 seconds)
+    $deviceCode = $null
+    $startTime = Get-Date
+    $allOutput = ""
+
+    while (((Get-Date) - $startTime).TotalSeconds -lt 10 -and -not $deviceCode) {
+        Start-Sleep -Milliseconds 500
+
+        # Read available output
+        if (-not $proc.StandardError.EndOfStream) {
+            $line = $proc.StandardError.ReadLine()
+            if ($line) {
+                $allOutput += "$line`n"
+                # Look for the device code pattern (XXXX-XXXX)
+                if ($line -match '([A-Z0-9]{4}-[A-Z0-9]{4})') {
+                    $deviceCode = $matches[1]
+                }
+            }
+        }
+    }
+
+    if ($deviceCode) {
+        Write-Host "    Device code: " -ForegroundColor White -NoNewline
+        Write-Host $deviceCode -ForegroundColor Cyan
+        Write-Host ""
+
+        # Generate QR code URL (pre-fills the code on GitHub)
+        $githubUrl = "https://github.com/login/device?user_code=$deviceCode"
+        $qrApiUrl = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=$([uri]::EscapeDataString($githubUrl))"
+
+        # Show popup with code and QR
+        Write-Host "    Opening login popup..." -ForegroundColor Gray
+        $popup = Show-DeviceCodePopup -Code $deviceCode -QrUrl $qrApiUrl
+
+        # Also open browser to GitHub
+        Start-Process $githubUrl
+
+        Write-Host ""
+        Write-Host "    Complete login in browser or scan QR with phone." -ForegroundColor White
+        Write-Host "    Click 'I've completed login' when done." -ForegroundColor White
+        Write-Host ""
+
+        # Wait for popup to close (user clicks button)
+        while ($popup.Visible) {
+            [System.Windows.Forms.Application]::DoEvents()
+            Start-Sleep -Milliseconds 100
+        }
+        $popup.Dispose()
+    } else {
+        # Fallback: couldn't capture code, use old method
+        Write-Host "    Could not capture device code, using fallback method..." -ForegroundColor Yellow
+        Write-Host "    A new window will open with a login code." -ForegroundColor White
+        Write-Host ""
+        Read-Host "    Press Enter to open login window"
+
+        # Kill the background process
+        try { $proc.Kill() } catch {}
+
+        # Start in visible window
+        $proc = Start-Process -FilePath "cmd.exe" -ArgumentList "/c set GH_FORCE_TTY=1 && `"$ghExe`" auth login --hostname github.com --git-protocol https --web" -PassThru
+
+        Write-Host ""
+        Read-Host "    Press Enter after completing GitHub login"
+    }
+
+    # Kill gh process if still running
     try {
         if (-not $proc.HasExited) {
-            Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+            $proc.Kill()
         }
-        # Also kill any lingering gh processes from this auth
         Get-Process -Name "gh" -ErrorAction SilentlyContinue | Where-Object { $_.StartTime -gt (Get-Date).AddMinutes(-5) } | Stop-Process -Force -ErrorAction SilentlyContinue
     } catch {}
 
