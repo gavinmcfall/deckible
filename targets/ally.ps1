@@ -217,7 +217,7 @@ function Show-DeviceCodePopup {
 
     $form = New-Object System.Windows.Forms.Form
     $form.Text = "GitHub Login"
-    $form.Size = New-Object System.Drawing.Size(500, 400)
+    $form.Size = New-Object System.Drawing.Size(500, 420)
     $form.StartPosition = "CenterScreen"
     $form.FormBorderStyle = "FixedDialog"
     $form.MaximizeBox = $false
@@ -226,68 +226,66 @@ function Show-DeviceCodePopup {
 
     # Title
     $title = New-Object System.Windows.Forms.Label
-    $title.Text = "Enter this code on GitHub:"
-    $title.Font = New-Object System.Drawing.Font("Segoe UI", 14, [System.Drawing.FontStyle]::Regular)
+    $title.Text = "Scan QR or enter code:"
+    $title.Font = New-Object System.Drawing.Font("Segoe UI", 14)
     $title.ForeColor = [System.Drawing.Color]::White
     $title.AutoSize = $true
-    $title.Location = New-Object System.Drawing.Point(120, 20)
+    $title.Location = New-Object System.Drawing.Point(140, 15)
     $form.Controls.Add($title)
 
     # Large code display
     $codeLabel = New-Object System.Windows.Forms.Label
     $codeLabel.Text = $Code
-    $codeLabel.Font = New-Object System.Drawing.Font("Consolas", 48, [System.Drawing.FontStyle]::Bold)
+    $codeLabel.Font = New-Object System.Drawing.Font("Consolas", 42, [System.Drawing.FontStyle]::Bold)
     $codeLabel.ForeColor = [System.Drawing.Color]::FromArgb(88, 166, 255)
     $codeLabel.AutoSize = $true
-    $codeLabel.Location = New-Object System.Drawing.Point(80, 60)
+    $codeLabel.Location = New-Object System.Drawing.Point(100, 50)
     $form.Controls.Add($codeLabel)
 
-    # Instructions
-    $instructions = New-Object System.Windows.Forms.Label
-    $instructions.Text = "Or scan the QR code with your phone:"
-    $instructions.Font = New-Object System.Drawing.Font("Segoe UI", 11, [System.Drawing.FontStyle]::Regular)
-    $instructions.ForeColor = [System.Drawing.Color]::LightGray
-    $instructions.AutoSize = $true
-    $instructions.Location = New-Object System.Drawing.Point(120, 140)
-    $form.Controls.Add($instructions)
-
-    # QR Code image
-    $qrPictureBox = New-Object System.Windows.Forms.PictureBox
-    $qrPictureBox.Size = New-Object System.Drawing.Size(150, 150)
-    $qrPictureBox.Location = New-Object System.Drawing.Point(165, 170)
-    $qrPictureBox.SizeMode = "Zoom"
-    $qrPictureBox.BackColor = [System.Drawing.Color]::White
+    # QR Code
+    $qrBox = New-Object System.Windows.Forms.PictureBox
+    $qrBox.Size = New-Object System.Drawing.Size(180, 180)
+    $qrBox.Location = New-Object System.Drawing.Point(155, 120)
+    $qrBox.SizeMode = "Zoom"
+    $qrBox.BackColor = [System.Drawing.Color]::White
 
     try {
-        $webClient = New-Object System.Net.WebClient
-        $qrImageBytes = $webClient.DownloadData($QrUrl)
-        $ms = New-Object System.IO.MemoryStream(, $qrImageBytes)
-        $qrPictureBox.Image = [System.Drawing.Image]::FromStream($ms)
+        $wc = New-Object System.Net.WebClient
+        $bytes = $wc.DownloadData($QrUrl)
+        $ms = New-Object System.IO.MemoryStream(,$bytes)
+        $qrBox.Image = [System.Drawing.Image]::FromStream($ms)
     } catch {
-        # If QR fails, just show placeholder text
-        $qrPictureBox.BackColor = [System.Drawing.Color]::Gray
+        $qrBox.BackColor = [System.Drawing.Color]::Gray
     }
-    $form.Controls.Add($qrPictureBox)
+    $form.Controls.Add($qrBox)
+
+    # Status
+    $status = New-Object System.Windows.Forms.Label
+    $status.Text = "Waiting for login..."
+    $status.Font = New-Object System.Drawing.Font("Segoe UI", 10)
+    $status.ForeColor = [System.Drawing.Color]::Gray
+    $status.AutoSize = $true
+    $status.Location = New-Object System.Drawing.Point(175, 310)
+    $form.Controls.Add($status)
 
     # Close button
-    $closeButton = New-Object System.Windows.Forms.Button
-    $closeButton.Text = "I've completed login"
-    $closeButton.Font = New-Object System.Drawing.Font("Segoe UI", 11, [System.Drawing.FontStyle]::Regular)
-    $closeButton.Size = New-Object System.Drawing.Size(200, 40)
-    $closeButton.Location = New-Object System.Drawing.Point(145, 330)
-    $closeButton.BackColor = [System.Drawing.Color]::FromArgb(46, 160, 67)
-    $closeButton.ForeColor = [System.Drawing.Color]::White
-    $closeButton.FlatStyle = "Flat"
-    $closeButton.Add_Click({ $form.Close() })
-    $form.Controls.Add($closeButton)
+    $btn = New-Object System.Windows.Forms.Button
+    $btn.Text = "Done"
+    $btn.Font = New-Object System.Drawing.Font("Segoe UI", 11)
+    $btn.Size = New-Object System.Drawing.Size(140, 40)
+    $btn.Location = New-Object System.Drawing.Point(175, 340)
+    $btn.BackColor = [System.Drawing.Color]::FromArgb(46, 160, 67)
+    $btn.ForeColor = [System.Drawing.Color]::White
+    $btn.FlatStyle = "Flat"
+    $btn.Add_Click({ $form.Close() })
+    $form.Controls.Add($btn)
 
-    # Show non-blocking (will be closed by button or externally)
     $form.Show()
-    return $form
+    return @{ Form = $form; Status = $status }
 }
 
 function Authenticate-GitHub {
-    # Use GitHub's Device Flow API directly for reliable code capture
+    # Use GitHub's Device Flow API directly for reliable auth with nice popup
     Write-Status "Setting up GitHub authentication..." "Info"
 
     # Check if gh is installed (needed to store token later)
@@ -350,39 +348,29 @@ function Authenticate-GitHub {
 
     # GitHub CLI's OAuth client_id (public, used by gh CLI)
     $clientId = "178c6fc778ccc68e1d6a"
-    $scope = "repo,read:org,gist"
+    $scope = "repo,read:org"
 
     try {
-        # Request device code from GitHub
+        # Request device code from GitHub (JSON response)
         Write-Host "    Requesting login code..." -ForegroundColor Gray
-        $deviceResponse = Invoke-RestMethod -Uri "https://github.com/login/device/code" -Method Post -Body @{
-            client_id = $clientId
-            scope = $scope
-        } -ContentType "application/x-www-form-urlencoded"
+        $headers = @{ "Accept" = "application/json" }
+        $deviceResponse = Invoke-RestMethod -Uri "https://github.com/login/device/code" -Method Post -Body "client_id=$clientId&scope=$scope" -ContentType "application/x-www-form-urlencoded" -Headers $headers
 
-        # Parse response (comes as query string format)
-        $params = @{}
-        $deviceResponse -split '&' | ForEach-Object {
-            $kv = $_ -split '='
-            $params[$kv[0]] = [System.Web.HttpUtility]::UrlDecode($kv[1])
-        }
-
-        $deviceCode = $params['device_code']
-        $userCode = $params['user_code']
-        $verificationUri = $params['verification_uri']
-        $expiresIn = [int]$params['expires_in']
-        $interval = [int]$params['interval']
+        $deviceCode = $deviceResponse.device_code
+        $userCode = $deviceResponse.user_code
+        $interval = $deviceResponse.interval
+        $expiresIn = $deviceResponse.expires_in
 
         if (-not $userCode) {
             throw "Failed to get device code from GitHub"
         }
 
-        # Generate QR code URL (pre-fills the code on GitHub)
-        $githubUrl = "https://github.com/login/device?user_code=$userCode"
+        # Generate QR code URL
+        $githubUrl = "https://github.com/login/device"
         $qrApiUrl = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=$([uri]::EscapeDataString($githubUrl))"
 
-        # Show popup with code and QR (no browser opening - user uses phone)
-        $popup = Show-DeviceCodePopup -Code $userCode -QrUrl $qrApiUrl
+        # Show popup with code and QR
+        $ui = Show-DeviceCodePopup -Code $userCode -QrUrl $qrApiUrl
 
         Write-Host ""
         Write-Host "    Scan the QR code with your phone to login." -ForegroundColor White
@@ -392,40 +380,31 @@ function Authenticate-GitHub {
         $accessToken = $null
         $pollStart = Get-Date
         $maxWait = [Math]::Min($expiresIn, 300)  # Max 5 minutes
+        $tokenHeaders = @{ "Accept" = "application/json" }
 
-        while ($popup.Visible -and ((Get-Date) - $pollStart).TotalSeconds -lt $maxWait) {
+        while ($ui.Form.Visible -and ((Get-Date) - $pollStart).TotalSeconds -lt $maxWait) {
             [System.Windows.Forms.Application]::DoEvents()
             Start-Sleep -Seconds $interval
 
             # Poll for token
             try {
-                $tokenResponse = Invoke-RestMethod -Uri "https://github.com/login/oauth/access_token" -Method Post -Body @{
-                    client_id = $clientId
-                    device_code = $deviceCode
-                    grant_type = "urn:ietf:params:oauth:grant-type:device_code"
-                } -ContentType "application/x-www-form-urlencoded" -ErrorAction SilentlyContinue
+                $tokenResponse = Invoke-RestMethod -Uri "https://github.com/login/oauth/access_token" -Method Post -Body "client_id=$clientId&device_code=$deviceCode&grant_type=urn:ietf:params:oauth:grant-type:device_code" -ContentType "application/x-www-form-urlencoded" -Headers $tokenHeaders -ErrorAction SilentlyContinue
 
-                # Parse response
-                $tokenParams = @{}
-                $tokenResponse -split '&' | ForEach-Object {
-                    $kv = $_ -split '='
-                    if ($kv.Count -eq 2) {
-                        $tokenParams[$kv[0]] = [System.Web.HttpUtility]::UrlDecode($kv[1])
-                    }
-                }
-
-                if ($tokenParams['access_token']) {
-                    $accessToken = $tokenParams['access_token']
-                    $popup.Close()
+                if ($tokenResponse.access_token) {
+                    $accessToken = $tokenResponse.access_token
+                    $ui.Status.Text = "Success!"
+                    $ui.Status.ForeColor = [System.Drawing.Color]::LightGreen
+                    [System.Windows.Forms.Application]::DoEvents()
+                    Start-Sleep -Seconds 1
+                    $ui.Form.Close()
                     break
                 }
-                # If error is "authorization_pending", keep polling
             } catch {
                 # Ignore polling errors, keep trying
             }
         }
 
-        $popup.Dispose()
+        $ui.Form.Dispose()
 
         if ($accessToken) {
             # Save token to gh CLI
