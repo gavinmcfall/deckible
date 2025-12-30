@@ -1,17 +1,160 @@
-# SSH Module - SSH Key Setup & GitHub Authentication
-# ==================================================
-# Generates SSH keys and configures GitHub for SSH authentication.
-# This enables git operations via SSH instead of HTTPS.
+# SSH Module - SSH Server & Key Setup
+# ====================================
+# Configures SSH server for remote access and generates keys for GitHub auth.
 #
-# Why SSH keys?
-# - More secure than password auth
-# - No need to re-authenticate constantly
-# - Works well with private repos
-# - Keys are device-specific for easy revocation
+# Features:
+# - Enable OpenSSH Server for remote access to this device
+# - Import authorized keys from private repo (allow other machines to SSH in)
+# - Generate SSH keys for this device
+# - Add keys to GitHub for git operations
+#
+# Security notes:
+# - Use Tailscale or similar for secure access over internet
+# - Don't expose SSH directly to internet without proper hardening
 
 if (-not (Get-ConfigValue "install_ssh" $false)) {
     Write-Status "SSH module disabled in config" "Info"
     return
+}
+
+# =============================================================================
+# SSH SERVER (OpenSSH Server)
+# =============================================================================
+# Enable SSH server so other machines can SSH into this device.
+
+$enableSshServer = Get-ConfigValue "ssh_server_enable" $false
+
+if ($enableSshServer) {
+    Write-Status "Configuring OpenSSH Server..." "Info"
+
+    if ($Script:DryRun) {
+        Write-Status "[DRY RUN] Would install/enable OpenSSH Server" "Info"
+    } else {
+        try {
+            # Check if OpenSSH Server is installed
+            $sshServerCapability = Get-WindowsCapability -Online | Where-Object Name -like 'OpenSSH.Server*'
+
+            if ($sshServerCapability.State -ne 'Installed') {
+                Write-Status "Installing OpenSSH Server..." "Info"
+                Add-WindowsCapability -Online -Name 'OpenSSH.Server~~~~0.0.1.0' | Out-Null
+                Write-Status "OpenSSH Server installed" "Success"
+            } else {
+                Write-Status "OpenSSH Server already installed" "Info"
+            }
+
+            # Configure and start the SSH server service
+            $sshd = Get-Service -Name sshd -ErrorAction SilentlyContinue
+            if ($sshd) {
+                # Set to automatic start
+                Set-Service -Name sshd -StartupType Automatic
+
+                # Start if not running
+                if ($sshd.Status -ne 'Running') {
+                    Start-Service sshd
+                    Write-Status "SSH Server started" "Success"
+                } else {
+                    Write-Status "SSH Server already running" "Info"
+                }
+
+                # Also configure ssh-agent for key management
+                Set-Service -Name ssh-agent -StartupType Automatic
+                Start-Service ssh-agent -ErrorAction SilentlyContinue
+            }
+
+            # Configure firewall rule
+            $fwRule = Get-NetFirewallRule -Name 'OpenSSH-Server-In-TCP' -ErrorAction SilentlyContinue
+            if (-not $fwRule) {
+                New-NetFirewallRule -Name 'OpenSSH-Server-In-TCP' -DisplayName 'OpenSSH Server (sshd)' `
+                    -Enabled True -Direction Inbound -Protocol TCP -Action Allow -LocalPort 22 | Out-Null
+                Write-Status "Firewall rule added for SSH (port 22)" "Success"
+            }
+
+        } catch {
+            Write-Status "Failed to configure SSH Server: $_" "Error"
+        }
+    }
+}
+
+# =============================================================================
+# AUTHORIZED KEYS (Allow other machines to SSH in)
+# =============================================================================
+# Import public keys from private repo to allow SSH access from those machines.
+
+$importAuthorizedKeys = Get-ConfigValue "ssh_import_authorized_keys" $false
+$authorizedKeysList = Get-ConfigValue "ssh_authorized_keys" @()
+
+if ($importAuthorizedKeys -and $authorizedKeysList.Count -gt 0) {
+    Write-Status "Importing authorized SSH keys..." "Info"
+
+    # Windows OpenSSH uses different authorized_keys location for admins
+    $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+
+    if ($isAdmin) {
+        # Admin users use ProgramData location
+        $authorizedKeysPath = Join-Path $env:ProgramData "ssh\administrators_authorized_keys"
+        $sshConfigDir = Join-Path $env:ProgramData "ssh"
+    } else {
+        # Regular users use ~/.ssh/authorized_keys
+        $authorizedKeysPath = Join-Path $env:USERPROFILE ".ssh\authorized_keys"
+        $sshConfigDir = Join-Path $env:USERPROFILE ".ssh"
+    }
+
+    if ($Script:DryRun) {
+        Write-Status "[DRY RUN] Would import authorized keys to: $authorizedKeysPath" "Info"
+        foreach ($keyFile in $authorizedKeysList) {
+            Write-Status "[DRY RUN]   - $keyFile" "Info"
+        }
+    } else {
+        try {
+            # Ensure directory exists
+            if (-not (Test-Path $sshConfigDir)) {
+                New-Item -ItemType Directory -Path $sshConfigDir -Force | Out-Null
+            }
+
+            # Build authorized_keys content from private repo
+            $keysContent = @()
+            $privateRepoPath = $Script:PrivateRoot
+            $keysDir = Join-Path $privateRepoPath "ssh-keys"
+
+            foreach ($keyFile in $authorizedKeysList) {
+                $keyPath = Join-Path $keysDir $keyFile
+                if (Test-Path $keyPath) {
+                    $keyContent = Get-Content $keyPath -Raw
+                    $keysContent += $keyContent.Trim()
+                    Write-Status "Added key: $keyFile" "Info"
+                } else {
+                    Write-Status "Key file not found: $keyFile" "Warning"
+                }
+            }
+
+            if ($keysContent.Count -gt 0) {
+                # Write authorized_keys file
+                $keysContent -join "`n" | Set-Content -Path $authorizedKeysPath -Force -NoNewline
+
+                # Set correct permissions for Windows OpenSSH
+                if ($isAdmin) {
+                    # administrators_authorized_keys needs special ACL
+                    $acl = Get-Acl $authorizedKeysPath
+                    $acl.SetAccessRuleProtection($true, $false)
+
+                    # Only SYSTEM and Administrators should have access
+                    $systemRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+                        "SYSTEM", "FullControl", "None", "None", "Allow"
+                    )
+                    $adminRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+                        "Administrators", "FullControl", "None", "None", "Allow"
+                    )
+                    $acl.AddAccessRule($systemRule)
+                    $acl.AddAccessRule($adminRule)
+                    Set-Acl $authorizedKeysPath $acl
+                }
+
+                Write-Status "Authorized keys imported ($($keysContent.Count) keys)" "Success"
+            }
+        } catch {
+            Write-Status "Failed to import authorized keys: $_" "Error"
+        }
+    }
 }
 
 # =============================================================================
