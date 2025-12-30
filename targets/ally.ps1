@@ -249,25 +249,35 @@ function Authenticate-GitHub {
     }
 
     # Check if already authenticated
-    $authStatus = gh auth status 2>&1
+    Write-Host "    Checking GitHub auth status..." -ForegroundColor Gray
+    & gh auth status 2>&1 | Out-Null
     if ($LASTEXITCODE -eq 0) {
         Write-Status "Already authenticated with GitHub" "Success"
         gh auth setup-git 2>$null
         return $true
     }
 
-    # Authenticate with gh - use device code flow
+    # Not authenticated - need to login
     Write-Host ""
-    Write-Host "    GitHub login required. A code will appear - enter it at:" -ForegroundColor Yellow
-    Write-Host "    https://github.com/login/device" -ForegroundColor Cyan
+    Write-Host "    ============================================" -ForegroundColor Cyan
+    Write-Host "    GitHub Login Required" -ForegroundColor Cyan
+    Write-Host "    ============================================" -ForegroundColor Cyan
     Write-Host ""
-    Write-Host "    Press Enter to continue..." -ForegroundColor Gray
-    Read-Host | Out-Null
+    Write-Host "    1. Press Enter below" -ForegroundColor White
+    Write-Host "    2. A code like XXXX-XXXX will appear" -ForegroundColor White
+    Write-Host "    3. Go to: " -ForegroundColor White -NoNewline
+    Write-Host "https://github.com/login/device" -ForegroundColor Yellow
+    Write-Host "    4. Enter the code and authorize" -ForegroundColor White
+    Write-Host ""
+    Read-Host "    Press Enter to start login"
 
-    # Run gh auth with all needed flags to avoid interactive prompts
+    # Run gh auth
+    Write-Host ""
     gh auth login --hostname github.com --git-protocol https --web
-    if ($LASTEXITCODE -ne 0) {
-        Write-Status "GitHub authentication failed" "Warning"
+    $authResult = $LASTEXITCODE
+
+    if ($authResult -ne 0) {
+        Write-Status "GitHub authentication failed (exit code: $authResult)" "Warning"
         return $false
     }
 
