@@ -208,23 +208,44 @@ function Configure-GitCredentials {
 }
 
 function Authenticate-GitHub {
-    # Try GitHub CLI for authentication, fall back to GCM
+    # Try GitHub CLI for authentication (avoids GCM deadlock bug)
     Write-Status "Setting up GitHub authentication..." "Info"
 
     # Check if gh is installed
     $ghPath = Get-Command gh -ErrorAction SilentlyContinue
     if (-not $ghPath) {
         Write-Host "    Installing GitHub CLI..." -ForegroundColor Gray
+
+        # Try winget first
         winget install GitHub.cli --accept-package-agreements --accept-source-agreements --silent 2>$null
-        # Refresh PATH
         $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
         $ghPath = Get-Command gh -ErrorAction SilentlyContinue
+
+        # If winget failed, download directly
+        if (-not $ghPath) {
+            Write-Host "    Downloading GitHub CLI directly..." -ForegroundColor Gray
+            try {
+                $ghInstaller = "$env:TEMP\gh_installer.msi"
+                $ghUrl = "https://github.com/cli/cli/releases/download/v2.63.2/gh_2.63.2_windows_amd64.msi"
+                [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+                Invoke-WebRequest -Uri $ghUrl -OutFile $ghInstaller -UseBasicParsing
+
+                Write-Host "    Installing..." -ForegroundColor Gray
+                Start-Process -FilePath "msiexec.exe" -ArgumentList "/i `"$ghInstaller`" /quiet /norestart" -Wait
+                Remove-Item $ghInstaller -Force -ErrorAction SilentlyContinue
+
+                # Refresh PATH
+                $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+                $ghPath = Get-Command gh -ErrorAction SilentlyContinue
+            } catch {
+                Write-Host "    Could not install GitHub CLI: $_" -ForegroundColor Yellow
+            }
+        }
     }
 
     if (-not $ghPath) {
-        # GH CLI not available - GCM will handle auth during git clone
-        Write-Host "    Will use Git Credential Manager for authentication" -ForegroundColor Gray
-        return $true  # Continue - GCM will prompt during clone
+        Write-Status "GitHub CLI not available - private repos may not work" "Warning"
+        return $false
     }
 
     # Check if already authenticated
@@ -262,54 +283,20 @@ function Run-GitWithProgress {
 
     Write-Status "$Description..." "Info"
 
-    # Filter out --progress (can cause stderr buffering issues)
     $cleanArgs = @($Arguments | Where-Object { $_ -ne "--progress" })
-    $argString = $cleanArgs -join ' '
     $workDir = if ($WorkingDir) { $WorkingDir } else { (Get-Location).Path }
 
-    Write-Host "    [DEBUG] Git exe: $script:GitExe" -ForegroundColor Magenta
-    Write-Host "    [DEBUG] Arguments: $argString" -ForegroundColor Magenta
-    Write-Host "    [DEBUG] WorkDir: $workDir" -ForegroundColor Magenta
-
     try {
-        # Start git without waiting, then monitor it
-        Write-Host "    [DEBUG] Starting git process (no redirect, GCM can show prompts)..." -ForegroundColor Magenta
+        Push-Location $workDir
+        & $script:GitExe @cleanArgs
+        $exitCode = $LASTEXITCODE
+        Pop-Location
 
-        $psi = New-Object System.Diagnostics.ProcessStartInfo
-        $psi.FileName = $script:GitExe
-        $psi.Arguments = $argString
-        $psi.WorkingDirectory = $workDir
-        $psi.UseShellExecute = $true  # Let Windows handle it - allows GCM GUI
-
-        $proc = [System.Diagnostics.Process]::Start($psi)
-        $procId = $proc.Id
-        Write-Host "    [DEBUG] Git PID: $procId" -ForegroundColor Magenta
-
-        # Wait with status updates
-        $timeout = 300  # 5 minutes
-        $elapsed = 0
-        while (-not $proc.HasExited -and $elapsed -lt $timeout) {
-            Start-Sleep -Seconds 5
-            $elapsed += 5
-            Write-Host "    [DEBUG] Waiting... ($elapsed sec, PID $procId still running)" -ForegroundColor Magenta
+        if ($exitCode -ne 0) {
+            throw "Git command failed (exit code $exitCode)"
         }
-
-        if (-not $proc.HasExited) {
-            Write-Host "    [DEBUG] Timeout after $timeout seconds!" -ForegroundColor Red
-            $proc.Kill()
-            throw "Git command timed out after $timeout seconds"
-        }
-
-        Write-Host "    [DEBUG] Process exited with code: $($proc.ExitCode)" -ForegroundColor Magenta
-
-        if ($proc.ExitCode -ne 0) {
-            throw "Git command failed (exit code $($proc.ExitCode))"
-        }
-
-        Write-Host "    [DEBUG] Git completed successfully" -ForegroundColor Magenta
         return $true
     } catch {
-        Write-Host "    [DEBUG] Exception: $_" -ForegroundColor Red
         Write-Status "Git failed: $_" "Error"
         throw $_
     }
@@ -318,9 +305,9 @@ function Run-GitWithProgress {
 function Clone-Bootible {
     try {
         if (Test-Path $BootibleDir) {
-            Run-GitWithProgress -Description "Updating bootible repo" -Arguments @("pull", "--progress") -WorkingDir $BootibleDir
+            Run-GitWithProgress -Description "Updating bootible repo" -Arguments @("pull") -WorkingDir $BootibleDir
         } else {
-            Run-GitWithProgress -Description "Cloning bootible repo" -Arguments @("clone", "--progress", $RepoUrl, $BootibleDir)
+            Run-GitWithProgress -Description "Cloning bootible repo" -Arguments @("clone", $RepoUrl, $BootibleDir)
         }
         Write-Status "Bootible ready at $BootibleDir" "Success"
         return $true
@@ -361,13 +348,42 @@ function Setup-Private {
 
         try {
             if (Test-Path (Join-Path $privatePath ".git")) {
-                Run-GitWithProgress -Description "Updating private config" -Arguments @("pull", "--progress") -WorkingDir $privatePath
+                # Update existing - use git pull
+                Push-Location $privatePath
+                & $script:GitExe pull 2>&1 | Out-Null
+                Pop-Location
             } else {
                 if (Test-Path $privatePath) {
                     Write-Host "    Removing old private folder..." -ForegroundColor Gray
                     Remove-Item -Recurse -Force $privatePath
                 }
-                Run-GitWithProgress -Description "Cloning private config" -Arguments @("clone", "--progress", $PrivateRepo, $privatePath)
+
+                # Try gh CLI first (avoids GCM deadlock bug)
+                $ghPath = Get-Command gh -ErrorAction SilentlyContinue
+                if ($ghPath) {
+                    # Extract owner/repo from URL
+                    $repoSlug = $PrivateRepo -replace 'https://github.com/' -replace '\.git$'
+                    Write-Host "    Using GitHub CLI to clone..." -ForegroundColor Gray
+                    gh repo clone $repoSlug $privatePath 2>&1
+                    if ($LASTEXITCODE -ne 0) {
+                        throw "gh clone failed"
+                    }
+                } else {
+                    # Fall back to git with token in URL (if we can get one)
+                    $token = $null
+                    try { $token = gh auth token 2>$null } catch {}
+
+                    if ($token) {
+                        $repoSlug = $PrivateRepo -replace 'https://github.com/' -replace '\.git$'
+                        $tokenUrl = "https://$token@github.com/$repoSlug.git"
+                        Write-Host "    Cloning with token..." -ForegroundColor Gray
+                        & $script:GitExe clone $tokenUrl $privatePath 2>&1 | Out-Null
+                    } else {
+                        # Last resort - try normal git (may hang on GCM)
+                        Write-Host "    Cloning (browser auth may appear)..." -ForegroundColor Yellow
+                        & $script:GitExe clone $PrivateRepo $privatePath
+                    }
+                }
             }
             Write-Status "Private configuration linked" "Success"
         } catch {
