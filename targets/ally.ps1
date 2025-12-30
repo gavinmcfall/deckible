@@ -827,8 +827,10 @@ function Run-DeviceSetup {
     }
 }
 
-function Save-DryRunLog {
-    # Save dry run transcript to private repo logs folder and push to git
+function Save-RunLog {
+    param([switch]$DryRun)
+
+    # Save transcript to private repo logs folder and push to git
     $privatePath = Join-Path $BootibleDir "private"
     if (-not (Test-Path $privatePath)) {
         return
@@ -839,7 +841,8 @@ function Save-DryRunLog {
         New-Item -ItemType Directory -Path $logsPath -Force | Out-Null
     }
 
-    $logFileName = "$(Get-Date -Format 'yyyy-MM-dd')_dryrun.log"
+    $suffix = if ($DryRun) { "_dryrun" } else { "_run" }
+    $logFileName = "$(Get-Date -Format 'yyyy-MM-dd')$suffix.log"
     $logFile = Join-Path $logsPath $logFileName
 
     try {
@@ -852,7 +855,8 @@ function Save-DryRunLog {
         Copy-Item $Script:TranscriptFile $logFile -Force
         Remove-Item $Script:TranscriptFile -Force -ErrorAction SilentlyContinue
         Write-Host ""
-        Write-Status "Dry run log saved: $logFileName" "Success"
+        $logType = if ($DryRun) { "Dry run" } else { "Run" }
+        Write-Status "$logType log saved: $logFileName" "Success"
 
         # Push to git
         $gitExe = Find-GitExe
@@ -871,8 +875,9 @@ function Save-DryRunLog {
                 }
             }
 
+            $runType = if ($DryRun) { "dry run" } else { "run" }
             & $gitExe add "logs/$Device/$logFileName" 2>$null
-            & $gitExe commit -m "log: $Device dry run $(Get-Date -Format 'yyyy-MM-dd HH:mm')" 2>$null
+            & $gitExe commit -m "log: $Device $runType $(Get-Date -Format 'yyyy-MM-dd HH:mm')" 2>$null
 
             # Use cmd.exe to avoid PowerShell stderr handling issues
             cmd /c "`"$gitExe`" push 2>nul"
@@ -970,7 +975,7 @@ function Main {
         Write-Host ""
 
         # Save dry run log to private repo if available
-        Save-DryRunLog
+        Save-RunLog -DryRun
     } else {
         Write-Host "+------------------------------------------------------------+" -ForegroundColor Green
         Write-Host "|                   Setup Complete!                          |" -ForegroundColor White
@@ -988,21 +993,14 @@ function Main {
             }
         }
         Write-Host ""
+
+        # Save run log to private repo if available
+        Save-RunLog
     }
 
     Write-Host "To re-run anytime:" -ForegroundColor Gray
     Write-Host "  bootible" -ForegroundColor Gray
     Write-Host ""
-
-    # Clean up transcript if still running (non-dry-run case)
-    try {
-        Stop-Transcript -ErrorAction SilentlyContinue | Out-Null
-        if (Test-Path $Script:TranscriptFile) {
-            Remove-Item $Script:TranscriptFile -Force -ErrorAction SilentlyContinue
-        }
-    } catch {
-        # Ignore cleanup errors
-    }
 }
 
 # Run
