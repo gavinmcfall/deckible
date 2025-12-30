@@ -98,7 +98,7 @@ foreach ($app in $prodApps) {
 # =============================================================================
 
 $vpnApps = @(
-    @{ Id = "tailscale.tailscale"; Name = "Tailscale"; Config = "install_tailscale" },
+    @{ Id = "Tailscale.Tailscale"; Name = "Tailscale"; Config = "install_tailscale" },
     @{ Id = "Proton.ProtonVPN"; Name = "ProtonVPN"; Config = "install_protonvpn" }
 )
 

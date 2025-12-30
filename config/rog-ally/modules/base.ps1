@@ -115,13 +115,28 @@ if ($staticIpEnabled) {
 # WINGET SETUP
 # =============================================================================
 
-# Verify winget sources are up to date
-Write-Status "Updating winget sources..." "Info"
+# Aggressively refresh winget sources to avoid stale package data
+# Error -1978335138 (0x8A150014) = "No applicable installer found" often means stale sources
+Write-Status "Refreshing winget sources..." "Info"
 try {
-    winget source update
-    Write-Status "Winget sources updated" "Success"
+    # First, reset sources to ensure clean state
+    Write-Host "    Resetting winget sources..." -ForegroundColor Gray
+    $null = winget source reset --force 2>&1
+
+    # Then update with fresh data
+    Write-Host "    Updating package index..." -ForegroundColor Gray
+    $null = winget source update --accept-source-agreements 2>&1
+
+    # Verify sources are working by doing a quick search
+    $testResult = winget search "Microsoft.PowerShell" --accept-source-agreements 2>&1
+    if ($testResult -match "Microsoft.PowerShell") {
+        Write-Status "Winget sources refreshed and verified" "Success"
+    } else {
+        Write-Status "Winget sources updated but verification unclear" "Warning"
+    }
 } catch {
-    Write-Status "Could not update winget sources (continuing anyway)" "Warning"
+    Write-Status "Could not refresh winget sources: $_" "Warning"
+    Write-Status "Some package installs may fail - try running 'winget source reset --force' manually" "Info"
 }
 
 # Install essential utilities
