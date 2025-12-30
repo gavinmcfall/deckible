@@ -82,6 +82,25 @@
       when: create_snapshot | default(true)
       tags: always
 
+    - name: Check for recent bootible snapshot
+      become: true
+      ansible.builtin.shell: |
+        set -o pipefail
+        SNAPSHOT_DIR="/home/.snapshots"
+        # Check if a bootible snapshot was created in the last hour
+        if [ -d "$SNAPSHOT_DIR" ]; then
+          find "$SNAPSHOT_DIR" -maxdepth 1 -name "bootible-pre-setup-*" -mmin -60 | head -1
+        fi
+      args:
+        executable: /bin/bash
+      register: recent_snapshot
+      changed_when: false
+      failed_when: false
+      when:
+        - create_snapshot | default(true)
+        - home_fs_type.stdout | default('') == 'btrfs'
+      tags: always
+
     - name: Create btrfs snapshot of home directory
       become: true
       ansible.builtin.shell: |
@@ -98,13 +117,20 @@
         - create_snapshot | default(true)
         - home_fs_type.stdout | default('') == 'btrfs'
         - not ansible_check_mode
+        - recent_snapshot.stdout | default('') == ''
       changed_when: snapshot_result.rc == 0
       failed_when: false
       tags: always
 
     - name: Snapshot creation result
       ansible.builtin.debug:
-        msg: "{{ snapshot_result.stdout | default('Snapshot skipped (not btrfs or check mode)') }}"
+        msg: >-
+          {{
+            snapshot_result.stdout | default(
+              'Using existing snapshot: ' + recent_snapshot.stdout if recent_snapshot.stdout | default('') != ''
+              else 'Snapshot skipped (not btrfs or check mode)'
+            )
+          }}
       when: create_snapshot | default(true)
       tags: always
 
