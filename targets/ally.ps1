@@ -256,16 +256,19 @@ function Authenticate-GitHub {
         return $true
     }
 
-    # Authenticate with gh
+    # Authenticate with gh - use device code flow
     Write-Host ""
-    Write-Host "    A browser window will open - please log in to GitHub." -ForegroundColor Yellow
+    Write-Host "    GitHub login required. A code will appear - enter it at:" -ForegroundColor Yellow
+    Write-Host "    https://github.com/login/device" -ForegroundColor Cyan
     Write-Host ""
+    Write-Host "    Press Enter to continue..." -ForegroundColor Gray
+    Read-Host | Out-Null
 
-    gh auth login --web --git-protocol https
+    # Run gh auth with all needed flags to avoid interactive prompts
+    gh auth login --hostname github.com --git-protocol https --web
     if ($LASTEXITCODE -ne 0) {
-        # GH auth failed - GCM will handle it during clone
-        Write-Host "    Will use Git Credential Manager for authentication" -ForegroundColor Gray
-        return $true
+        Write-Status "GitHub authentication failed" "Warning"
+        return $false
     }
 
     # Configure git to use gh as credential helper
