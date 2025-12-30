@@ -56,7 +56,7 @@ irm https://raw.githubusercontent.com/gavinmcfall/bootible/main/targets/ally.ps1
 
 | Category | Steam Deck | ROG Ally (All Varients) |
 |----------|------------|------------|
-| **Package Manager** | Flatpak | winget |
+| **Package Manager** | Flatpak (pacman, nix optional) | winget (Chocolatey, Scoop optional) |
 | **Apps** | Discord, Spotify, VLC, browsers | Discord, Spotify, VLC, browsers |
 | **Gaming** | Decky Loader, Proton-GE | Steam, Xbox, game launchers |
 | **Streaming** | Moonlight, Chiaki, Greenlight | Moonlight, Chiaki, Parsec |
@@ -65,6 +65,14 @@ irm https://raw.githubusercontent.com/gavinmcfall/bootible/main/targets/ally.ps1
 | **Optimization** | SD card setup, shader cache | Debloat, gaming tweaks |
 
 Everything is **disabled by default** - enable only what you need in your config.
+
+Package managers are configurable in your config:
+```yaml
+package_managers:
+  winget: true      # Primary (always available)
+  chocolatey: true  # Fallback for problematic packages
+  scoop: false      # User-level package manager
+```
 
 ---
 
@@ -97,15 +105,21 @@ Then add this structure:
 ```
 your-private-repo/
 ├── rog-ally/
-│   ├── config.yml          # Your ROG Ally settings
-│   └── scripts/            # EmuDeck EA, etc.
+│   ├── config.yml              # Single device config
+│   ├── config-vengeance.yml    # OR multiple devices
+│   ├── config-vixen.yml        # (prompted at runtime)
+│   └── scripts/                # EmuDeck EA, etc.
 ├── steamdeck/
-│   ├── config.yml          # Your Steam Deck settings
-│   └── scripts/            # EmuDeck EA, etc.
+│   ├── config.yml              # Your Steam Deck settings
+│   └── scripts/                # EmuDeck EA, etc.
 └── logs/
-    ├── rog-ally/           # Dry run logs (auto-generated)
+    ├── rog-ally/               # Execution logs (auto-pushed)
+    │   ├── 2025-12-31_dryrun.log
+    │   └── 2025-12-31_run.log
     └── steamdeck/
 ```
+
+> **Note:** Execution logs are automatically pushed to your private repo after each run.
 
 ### Using Your Private Config
 
