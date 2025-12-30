@@ -34,8 +34,12 @@ irm https://bootible.dev/rog | iex
 
 That's it! Bootible runs in **dry-run mode** by default so you can preview changes. When ready, just type `bootible` to apply.
 
+> **Why bootible.dev?** The bootible.dev URLs include SHA256 integrity verification - scripts are validated before execution. This protects against compromised CDNs or man-in-the-middle attacks.
+
 <details>
-<summary>Alternative: Direct GitHub URLs</summary>
+<summary>Alternative: Direct GitHub URLs (not recommended)</summary>
+
+**Security Note:** These URLs bypass integrity verification. Only use if bootible.dev is unavailable.
 
 ```bash
 # Steam Deck
