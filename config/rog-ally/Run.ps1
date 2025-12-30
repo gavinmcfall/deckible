@@ -34,6 +34,14 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Start transcript to capture all output
+$Script:TranscriptFile = Join-Path $env:TEMP "bootible_run_$(Get-Date -Format 'yyyyMMdd_HHmmss').log"
+try {
+    Start-Transcript -Path $Script:TranscriptFile -Force | Out-Null
+} catch {
+    # Transcript failed to start, continue without it
+}
+
 # Import shared helper functions (used by tests too)
 $helpersPath = Join-Path $PSScriptRoot "lib/helpers.ps1"
 if (Test-Path $helpersPath) {
@@ -586,4 +594,55 @@ if (-not $Script:DryRun) {
     Write-Host "  - Set up game streaming apps (Moonlight, Chiaki, etc.)"
     Write-Host "  - Check README for additional configuration"
     Write-Host ""
+}
+
+# Save log to private repo and push
+$privatePath = Join-Path $Script:BootibleRoot "private"
+if (Test-Path $privatePath) {
+    $logsPath = Join-Path $privatePath "logs\rog-ally"
+    if (-not (Test-Path $logsPath)) {
+        New-Item -ItemType Directory -Path $logsPath -Force | Out-Null
+    }
+
+    $suffix = if ($Script:DryRun) { "_dryrun" } else { "_run" }
+    $logFileName = "$(Get-Date -Format 'yyyy-MM-dd')$suffix.log"
+    $logFile = Join-Path $logsPath $logFileName
+
+    try { Stop-Transcript | Out-Null } catch { }
+
+    if (Test-Path $Script:TranscriptFile) {
+        Copy-Item $Script:TranscriptFile $logFile -Force
+        Remove-Item $Script:TranscriptFile -Force -ErrorAction SilentlyContinue
+
+        $logType = if ($Script:DryRun) { "Dry run" } else { "Run" }
+        Write-Host "[OK] $logType log saved: $logFileName" -ForegroundColor Green
+
+        # Push to git
+        $gitExe = Get-Command git -ErrorAction SilentlyContinue
+        if ($gitExe) {
+            Push-Location $privatePath
+            $prevEAP = $ErrorActionPreference
+            $ErrorActionPreference = "Continue"
+            try {
+                $runType = if ($Script:DryRun) { "dry run" } else { "run" }
+                & git add "logs/rog-ally/$logFileName" 2>$null
+                & git commit -m "log: rog-ally $runType $(Get-Date -Format 'yyyy-MM-dd HH:mm')" 2>$null
+                cmd /c "git push 2>nul"
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Host "[OK] Log pushed to private repo" -ForegroundColor Green
+                } else {
+                    Write-Host "[!] Could not push log" -ForegroundColor Yellow
+                }
+            } finally {
+                $ErrorActionPreference = $prevEAP
+                Pop-Location
+            }
+        }
+    }
+} else {
+    # No private repo - just clean up transcript
+    try { Stop-Transcript | Out-Null } catch { }
+    if (Test-Path $Script:TranscriptFile) {
+        Remove-Item $Script:TranscriptFile -Force -ErrorAction SilentlyContinue
+    }
 }
