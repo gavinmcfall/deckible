@@ -27,6 +27,13 @@
   when: plugin.value.repo_type == "github"
   failed_when: false
 
+- name: Warn on GitHub API failure for {{ plugin.key }}
+  ansible.builtin.debug:
+    msg: "GitHub API failed for {{ plugin.key }}: {{ github_release.msg | default('Unknown error') }} (status: {{ github_release.status | default('N/A') }})"
+  when:
+    - plugin.value.repo_type == "github"
+    - github_release.status | default(0) != 200
+
 - name: Find zip download URL (GitHub) for {{ plugin.key }}
   ansible.builtin.set_fact:
     plugin_zip_url: >-
@@ -63,6 +70,13 @@
   when: plugin.value.repo_type == "gitlab"
   failed_when: false
 
+- name: Warn on GitLab API failure for {{ plugin.key }}
+  ansible.builtin.debug:
+    msg: "GitLab API failed for {{ plugin.key }}: {{ gitlab_releases.msg | default('Unknown error') }} (status: {{ gitlab_releases.status | default('N/A') }})"
+  when:
+    - plugin.value.repo_type == "gitlab"
+    - gitlab_releases.status | default(0) != 200
+
 - name: Find zip download URL (GitLab) for {{ plugin.key }}
   vars:
     release_links: "{{ gitlab_releases.json[0].assets.links | default([]) }}"
@@ -98,6 +112,13 @@
     - not plugin_dir.stat.exists
   register: plugin_download
   failed_when: false
+
+- name: Warn on download failure for {{ plugin.key }}
+  ansible.builtin.debug:
+    msg: "Download failed for {{ plugin.key }}: {{ plugin_download.msg | default('Unknown error') }}"
+  when:
+    - plugin_download is defined
+    - plugin_download is failed
 
 # Extract plugin
 - name: Extract plugin for {{ plugin.key }}
