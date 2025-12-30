@@ -40,17 +40,21 @@ if ($armouryInstalled) {
     }
 }
 
-# MyASUS
+# MyASUS (Microsoft Store only - not in winget)
 if (Get-ConfigValue "install_myasus" $true) {
     $myasusInstalled = Get-AppxPackage | Where-Object { $_.Name -like "*MyASUS*" }
     if ($myasusInstalled) {
         Write-Status "MyASUS already installed - skipping" "Success"
     } elseif ($Script:DryRun) {
-        Write-Status "[DRY RUN] Would install MyASUS" "Info"
+        Write-Status "[DRY RUN] Would install MyASUS from Microsoft Store" "Info"
     } else {
-        Write-Status "Installing MyASUS..." "Info"
-        $installed = Install-WingetPackage -PackageId "ASUS.MyASUS" -Name "MyASUS"
-        if (-not $installed) {
+        Write-Status "Installing MyASUS from Microsoft Store..." "Info"
+        try {
+            # MyASUS Store ID: 9N7R5S6B0ZZH
+            Start-Process "ms-windows-store://pdp/?ProductId=9N7R5S6B0ZZH" -Wait:$false
+            Write-Status "Microsoft Store opened - please complete MyASUS installation" "Warning"
+            Write-Status "Continuing with other installations..." "Info"
+        } catch {
             Write-Status "MyASUS: Install manually from Microsoft Store" "Warning"
         }
     }
@@ -83,7 +87,28 @@ if (Get-ConfigValue "install_hwinfo" $false) {
 }
 
 if (Get-ConfigValue "install_msi_afterburner" $false) {
-    Install-WingetPackage -PackageId "Guru3D.Afterburner" -Name "MSI Afterburner"
+    $afterburnerPath = "${env:ProgramFiles(x86)}\MSI Afterburner\MSIAfterburner.exe"
+    if (Test-Path $afterburnerPath) {
+        Write-Status "MSI Afterburner already installed - skipping" "Success"
+    } elseif ($Script:DryRun) {
+        Write-Status "[DRY RUN] Would install MSI Afterburner" "Info"
+    } else {
+        # Winget hangs on this installer - use Chocolatey if available
+        $choco = Get-Command choco -ErrorAction SilentlyContinue
+        if ($choco) {
+            Write-Status "Installing MSI Afterburner via Chocolatey..." "Info"
+            choco install msiafterburner -y 2>&1 | Out-Null
+            if ($LASTEXITCODE -eq 0) {
+                Write-Status "MSI Afterburner installed" "Success"
+            } else {
+                Write-Status "Chocolatey install failed - download manually" "Warning"
+                Write-Status "https://www.msi.com/Landing/afterburner/graphics-cards" "Info"
+            }
+        } else {
+            Write-Status "MSI Afterburner requires Chocolatey or manual install" "Warning"
+            Write-Status "https://www.msi.com/Landing/afterburner/graphics-cards" "Info"
+        }
+    }
     Write-Status "MSI Afterburner: GPU monitoring and overclocking" "Info"
 }
 

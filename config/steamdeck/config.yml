@@ -43,6 +43,17 @@ static_ip:
 github_token: ""
 
 # =============================================================================
+# PACKAGE MANAGERS
+# =============================================================================
+# Which package managers to use for installing software.
+# Note: Only Flatpak survives SteamOS updates. Others require reinstall.
+
+package_managers:
+  flatpak: true       # Flatpak/Flathub - recommended, survives updates
+  pacman: false       # Arch pacman - requires unlocking filesystem, lost on updates
+  nix: false          # Nix package manager - survives updates, advanced users
+
+# =============================================================================
 # DESKTOP APPLICATIONS (Flatpak)
 # =============================================================================
 # Apps installed via Flatpak from Flathub. These survive SteamOS updates.

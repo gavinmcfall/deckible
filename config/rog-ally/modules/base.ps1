@@ -112,8 +112,54 @@ if ($staticIpEnabled) {
 }
 
 # =============================================================================
-# WINGET SETUP
+# PACKAGE MANAGERS SETUP
 # =============================================================================
+
+# Chocolatey - install if enabled and not already present
+$pkgManagers = Get-ConfigValue "package_managers" @{}
+if ($pkgManagers.chocolatey -eq $true) {
+    $chocoInstalled = Get-Command choco -ErrorAction SilentlyContinue
+    if ($chocoInstalled) {
+        Write-Status "Chocolatey already installed" "Success"
+    } elseif ($Script:DryRun) {
+        Write-Status "[DRY RUN] Would install Chocolatey" "Info"
+    } else {
+        Write-Status "Installing Chocolatey..." "Info"
+        try {
+            $prevEAP = $ErrorActionPreference
+            $ErrorActionPreference = "Continue"
+            try {
+                [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
+                Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1')) 2>&1 | Out-Null
+            } finally {
+                $ErrorActionPreference = $prevEAP
+            }
+            # Refresh PATH
+            $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+            Write-Status "Chocolatey installed" "Success"
+        } catch {
+            Write-Status "Failed to install Chocolatey: $_" "Warning"
+        }
+    }
+}
+
+# Scoop - install if enabled and not already present
+if ($pkgManagers.scoop -eq $true) {
+    $scoopInstalled = Get-Command scoop -ErrorAction SilentlyContinue
+    if ($scoopInstalled) {
+        Write-Status "Scoop already installed" "Success"
+    } elseif ($Script:DryRun) {
+        Write-Status "[DRY RUN] Would install Scoop" "Info"
+    } else {
+        Write-Status "Installing Scoop..." "Info"
+        try {
+            Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression 2>&1 | Out-Null
+            Write-Status "Scoop installed" "Success"
+        } catch {
+            Write-Status "Failed to install Scoop: $_" "Warning"
+        }
+    }
+}
 
 # Update winget source (don't reset - it can delete the source on some systems)
 Write-Status "Updating winget source..." "Info"

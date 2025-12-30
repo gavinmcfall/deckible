@@ -32,9 +32,20 @@ static_ip:
     # - ""              # e.g., "8.8.4.4"
 
 # =============================================================================
-# DESKTOP APPLICATIONS (winget)
+# PACKAGE MANAGERS
 # =============================================================================
-# Apps installed via winget. These are system-wide installations.
+# Which package managers to use for installing software.
+# winget is built into Windows 11 and is always available.
+
+package_managers:
+  winget: true        # Windows Package Manager (built-in, always available)
+  chocolatey: true    # Chocolatey - fallback for packages that fail on winget
+  scoop: false        # Scoop - user-level package manager (optional)
+
+# =============================================================================
+# DESKTOP APPLICATIONS
+# =============================================================================
+# Apps installed via configured package managers.
 
 install_apps: true
 
