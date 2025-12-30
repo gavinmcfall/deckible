@@ -105,25 +105,21 @@ if ($authed) {
     return
 }
 
-# Get device code from GitHub API
+# Get device code from GitHub API (request JSON response)
 Write-Host "Getting login code..." -ForegroundColor Gray
 $clientId = "178c6fc778ccc68e1d6a"
-$resp = Invoke-RestMethod -Uri "https://github.com/login/device/code" -Method Post -Body "client_id=$clientId&scope=repo,read:org" -ContentType "application/x-www-form-urlencoded"
+$headers = @{ "Accept" = "application/json" }
+$resp = Invoke-RestMethod -Uri "https://github.com/login/device/code" -Method Post -Body "client_id=$clientId&scope=repo,read:org" -ContentType "application/x-www-form-urlencoded" -Headers $headers
 
-$params = @{}
-$resp -split '&' | ForEach-Object { $k,$v = $_ -split '=',2; $params[$k] = [uri]::UnescapeDataString($v) }
-
-$userCode = $params['user_code']
-$deviceCode = $params['device_code']
-$interval = [int]$params['interval']
+$userCode = $resp.user_code
+$deviceCode = $resp.device_code
+$interval = $resp.interval
+$url = $resp.verification_uri_complete  # GitHub provides URL with code pre-filled!
 
 if (-not $userCode) {
     Write-Host "Failed to get code!" -ForegroundColor Red
     return
 }
-
-# Show popup
-$url = "https://github.com/login/device?code=$userCode"
 $qr = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=$([uri]::EscapeDataString($url))"
 $ui = Show-DeviceCodePopup -Code $userCode -QrUrl $qr
 
@@ -133,14 +129,15 @@ Write-Host ""
 
 # Poll for auth
 $token = $null
+$tokenHeaders = @{ "Accept" = "application/json" }
 while ($ui.Form.Visible) {
     [System.Windows.Forms.Application]::DoEvents()
     Start-Sleep -Seconds $interval
 
     try {
-        $tr = Invoke-RestMethod -Uri "https://github.com/login/oauth/access_token" -Method Post -Body "client_id=$clientId&device_code=$deviceCode&grant_type=urn:ietf:params:oauth:grant-type:device_code" -ContentType "application/x-www-form-urlencoded" -ErrorAction SilentlyContinue
-        if ($tr -match 'access_token=([^&]+)') {
-            $token = $matches[1]
+        $tr = Invoke-RestMethod -Uri "https://github.com/login/oauth/access_token" -Method Post -Body "client_id=$clientId&device_code=$deviceCode&grant_type=urn:ietf:params:oauth:grant-type:device_code" -ContentType "application/x-www-form-urlencoded" -Headers $tokenHeaders -ErrorAction SilentlyContinue
+        if ($tr.access_token) {
+            $token = $tr.access_token
             $ui.Status.Text = "Success!"
             $ui.Status.ForeColor = [System.Drawing.Color]::LightGreen
             [System.Windows.Forms.Application]::DoEvents()
