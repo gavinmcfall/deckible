@@ -160,6 +160,55 @@ function Find-GitExe {
     return $null
 }
 
+function Get-LatestGitVersion {
+    try {
+        $apiUrl = "https://api.github.com/repos/git-for-windows/git/releases/latest"
+        $release = Invoke-RestMethod -Uri $apiUrl -UseBasicParsing -TimeoutSec 10
+        # Tag format: v2.47.1.windows.1
+        if ($release.tag_name -match 'v(\d+\.\d+\.\d+)\.windows\.(\d+)') {
+            $version = $matches[1]
+            $suffix = $matches[2]
+            return @{
+                Version = $version
+                Tag = $release.tag_name
+                Url = "https://github.com/git-for-windows/git/releases/download/$($release.tag_name)/Git-$version-64-bit.exe"
+            }
+        }
+    } catch {
+        Write-Host "    Note: Could not fetch latest Git version, using fallback" -ForegroundColor Gray
+    }
+    # Fallback to known working version
+    return @{
+        Version = "2.47.1"
+        Tag = "v2.47.1.windows.1"
+        Url = "https://github.com/git-for-windows/git/releases/download/v2.47.1.windows.1/Git-2.47.1-64-bit.exe"
+    }
+}
+
+function Get-LatestGhCliVersion {
+    try {
+        $apiUrl = "https://api.github.com/repos/cli/cli/releases/latest"
+        $release = Invoke-RestMethod -Uri $apiUrl -UseBasicParsing -TimeoutSec 10
+        # Tag format: v2.63.2
+        if ($release.tag_name -match 'v(\d+\.\d+\.\d+)') {
+            $version = $matches[1]
+            return @{
+                Version = $version
+                Tag = $release.tag_name
+                Url = "https://github.com/cli/cli/releases/download/$($release.tag_name)/gh_${version}_windows_amd64.msi"
+            }
+        }
+    } catch {
+        Write-Host "    Note: Could not fetch latest gh version, using fallback" -ForegroundColor Gray
+    }
+    # Fallback to known working version
+    return @{
+        Version = "2.63.2"
+        Tag = "v2.63.2"
+        Url = "https://github.com/cli/cli/releases/download/v2.63.2/gh_2.63.2_windows_amd64.msi"
+    }
+}
+
 function Install-Git {
     $gitPath = Find-GitExe
     if ($gitPath) {
@@ -170,10 +219,11 @@ function Install-Git {
 
     Write-Status "Installing Git from GitHub (~65MB)..." "Info"
     try {
+        $gitInfo = Get-LatestGitVersion
         $gitInstaller = "$env:TEMP\Git-installer.exe"
-        $gitUrl = "https://github.com/git-for-windows/git/releases/download/v2.47.1.windows.1/Git-2.47.1-64-bit.exe"
+        $gitUrl = $gitInfo.Url
 
-        Write-Host "    Downloading..." -ForegroundColor Gray
+        Write-Host "    Downloading Git $($gitInfo.Version)..." -ForegroundColor Gray
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
         Invoke-WebRequest -Uri $gitUrl -OutFile $gitInstaller -UseBasicParsing
 
@@ -319,8 +369,10 @@ function Authenticate-GitHub {
         if (-not $ghPath) {
             Write-Host "    Downloading GitHub CLI directly..." -ForegroundColor Gray
             try {
+                $ghInfo = Get-LatestGhCliVersion
                 $ghInstaller = "$env:TEMP\gh_installer.msi"
-                $ghUrl = "https://github.com/cli/cli/releases/download/v2.63.2/gh_2.63.2_windows_amd64.msi"
+                $ghUrl = $ghInfo.Url
+                Write-Host "    Downloading gh $($ghInfo.Version)..." -ForegroundColor Gray
                 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
                 Invoke-WebRequest -Uri $ghUrl -OutFile $ghInstaller -UseBasicParsing
 
