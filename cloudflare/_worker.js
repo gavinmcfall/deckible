@@ -11,20 +11,37 @@
 
 const GITHUB_RAW_BASE = 'https://raw.githubusercontent.com/gavinmcfall/bootible/main';
 
+/**
+ * Script routes with SHA256 checksums for integrity verification.
+ * Update these hashes whenever scripts change (run: sha256sum targets/*.ps1 targets/*.sh)
+ */
 const ROUTES = {
   '/rog': {
     path: '/targets/ally.ps1',
     description: 'ROG Ally (Windows)',
+    sha256: '843698aac756d97f9876c603979b2aafab363da3ef57f5295ec8db5246428948',
   },
   '/deck': {
     path: '/targets/deck.sh',
     description: 'Steam Deck (SteamOS)',
+    sha256: 'e3c68da9ed821089ac03b7ec29ac0042c65e82d3298838e7ed01f953684a196a',
   },
 };
 
 const README_URL = `${GITHUB_RAW_BASE}/README.md`;
 
 const SCRIPT_CACHE_TTL = 60; // 1 minute (short for testing)
+
+/**
+ * Compute SHA256 hash of content using Web Crypto API
+ */
+async function sha256(content) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(content);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
 
 /**
  * Detect if request is from a browser (vs curl/PowerShell)
@@ -605,7 +622,7 @@ export default {
       }
     }
 
-    // Handle script routes (proxy from GitHub)
+    // Handle script routes (proxy from GitHub with integrity verification)
     const route = ROUTES[path];
     if (route) {
       // Add cache-buster to bypass GitHub's raw CDN cache
@@ -626,11 +643,28 @@ export default {
 
         const script = await response.text();
 
+        // Verify script integrity before serving
+        const computedHash = await sha256(script);
+        if (computedHash !== route.sha256) {
+          console.error(`Integrity check failed for ${route.path}: expected ${route.sha256}, got ${computedHash}`);
+          return new Response(
+            `Script integrity verification failed. The script may have been tampered with.\n` +
+            `Expected: ${route.sha256}\n` +
+            `Got: ${computedHash}\n\n` +
+            `Please report this issue at https://github.com/gavinmcfall/bootible/issues`,
+            {
+              status: 500,
+              headers: { 'Content-Type': 'text/plain' },
+            }
+          );
+        }
+
         return new Response(script, {
           headers: {
             'Content-Type': 'text/plain; charset=utf-8',
             'Cache-Control': 'no-cache, no-store, must-revalidate',
             'X-Bootible-Device': route.description,
+            'X-Bootible-Integrity': `sha256-${computedHash}`,
           },
         });
       } catch (error) {
