@@ -20,6 +20,10 @@ const ROUTES = {
     path: '/targets/deck.sh',
     description: 'Steam Deck (SteamOS)',
   },
+  '/git': {
+    path: '/targets/git-test.ps1',
+    description: 'Git Auth Test',
+  },
 };
 
 const README_URL = `${GITHUB_RAW_BASE}/README.md`;
