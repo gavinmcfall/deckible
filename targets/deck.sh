@@ -101,6 +101,7 @@ check_sudo() {
 
     # Verify sudo works
     echo "Enter your sudo password to continue:"
+    # shellcheck disable=SC2024  # Intentional: redirect stdin from tty, not stdout
     if ! sudo -v < /dev/tty; then
         echo -e "${RED}✗${NC} Sudo authentication failed"
         exit 1
