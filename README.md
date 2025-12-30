@@ -177,6 +177,24 @@ roms_path: "D:\\Emulation\\ROMs"
 bios_path: "D:\\Emulation\\BIOS"
 ```
 
+### Example: Steam Deck with Decky plugins
+
+```yaml
+# private/steamdeck/config.yml
+install_decky_loader: true
+decky_plugins:
+  - css_loader
+  - protondb_badges
+  - steamgriddb
+  # ... more plugins
+
+# IMPORTANT: Set this to avoid GitHub API rate limits (60 req/hour without)
+# Without a token, installing 10+ plugins may fail silently
+github_token: "ghp_your_token_here"
+```
+
+> **Note:** Create a [GitHub personal access token](https://github.com/settings/tokens) with no special scopes (public access only). Required if enabling many Decky plugins.
+
 See full config options:
 - [ROG Ally defaults](config/rog-ally/config.yml)
 - [Steam Deck defaults](config/steamdeck/config.yml)

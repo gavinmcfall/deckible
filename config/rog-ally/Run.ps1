@@ -91,6 +91,86 @@ function Install-Winget {
     }
 }
 
+function Initialize-WingetSources {
+    <#
+    .SYNOPSIS
+        Ensures winget sources are healthy before any package operations.
+        Resets, updates, and verifies sources. Reports source list to output.
+    #>
+    Write-Header "WINGET SOURCE INITIALIZATION"
+
+    # Step 1: Reset sources to clean state
+    Write-Status "Resetting winget sources..." "Info"
+    $resetResult = winget source reset --force 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Status "Source reset warning: $resetResult" "Warning"
+    } else {
+        Write-Status "Sources reset successfully" "Success"
+    }
+
+    # Step 2: Update sources
+    Write-Status "Updating winget sources..." "Info"
+    $updateResult = winget source update 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Status "Source update warning: $updateResult" "Warning"
+    } else {
+        Write-Status "Sources updated successfully" "Success"
+    }
+
+    # Step 3: List and verify sources
+    Write-Status "Verifying winget sources..." "Info"
+    $sourceList = winget source list 2>&1
+
+    # Check if winget source exists
+    $hasWingetSource = $sourceList -match "winget"
+    $hasMsStoreSource = $sourceList -match "msstore"
+
+    # If winget source missing, add it explicitly
+    if (-not $hasWingetSource) {
+        Write-Status "Winget source missing - adding explicitly..." "Warning"
+        $addResult = winget source add --name winget --arg "https://cdn.winget.microsoft.com/cache" --type "Microsoft.PreIndexed.Package" 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Write-Status "Failed to add winget source: $addResult" "Error"
+        } else {
+            Write-Status "Winget source added successfully" "Success"
+            $hasWingetSource = $true
+        }
+        # Refresh source list
+        $sourceList = winget source list 2>&1
+    }
+
+    # Display source status
+    Write-Host ""
+    Write-Host "  Available Sources:" -ForegroundColor Cyan
+    Write-Host "  ------------------" -ForegroundColor Cyan
+    foreach ($line in $sourceList) {
+        if ($line -match "^\s*\w") {
+            Write-Host "  $line" -ForegroundColor White
+        }
+    }
+    Write-Host ""
+
+    # Report source availability
+    if ($hasWingetSource) {
+        Write-Status "Primary source (winget) available" "Success"
+    } else {
+        Write-Status "Primary source (winget) NOT available" "Error"
+    }
+
+    if ($hasMsStoreSource) {
+        Write-Status "Fallback source (msstore) available" "Success"
+    } else {
+        Write-Status "Fallback source (msstore) NOT available" "Warning"
+    }
+
+    # Store source availability in script scope for Install-WingetPackage
+    $Script:HasWingetSource = $hasWingetSource
+    $Script:HasMsStoreSource = $hasMsStoreSource
+
+    Write-Host ""
+    return $hasWingetSource -or $hasMsStoreSource
+}
+
 function Get-ConfigValue {
     param(
         [string]$Key,
@@ -111,6 +191,31 @@ function Get-ConfigValue {
     return $value
 }
 
+function Ensure-YamlModule {
+    <#
+    .SYNOPSIS
+        Ensures the powershell-yaml module is installed for proper YAML parsing.
+    #>
+    if (-not (Get-Module -ListAvailable -Name powershell-yaml)) {
+        Write-Status "Installing powershell-yaml module..." "Info"
+        try {
+            Install-Module -Name powershell-yaml -Force -Scope CurrentUser -AllowClobber -ErrorAction Stop
+            Write-Status "powershell-yaml module installed" "Success"
+        } catch {
+            Write-Status "Failed to install powershell-yaml: $($_.Exception.Message)" "Error"
+            return $false
+        }
+    }
+
+    try {
+        Import-Module powershell-yaml -ErrorAction Stop
+        return $true
+    } catch {
+        Write-Status "Failed to import powershell-yaml: $($_.Exception.Message)" "Error"
+        return $false
+    }
+}
+
 function Import-YamlConfig {
     param([string]$Path)
 
@@ -118,120 +223,45 @@ function Import-YamlConfig {
         return @{}
     }
 
-    # Simple YAML parser for flat/nested configs with list support
-    # Supports 2-space, 4-space, or tab indentation
-    $config = @{}
     $content = Get-Content $Path -Raw
-    $lines = $content -split "`n"
-    $currentSection = $null
-    $currentSubSection = $null
-    $currentListKey = $null
-    $currentListLevel = 0  # 1 = section level, 2 = subsection level
 
-    foreach ($line in $lines) {
-        # Skip comments and empty lines
-        if ($line -match '^\s*#' -or $line -match '^\s*$' -or $line -match '^---') {
-            continue
+    # Use powershell-yaml for proper YAML parsing
+    try {
+        $config = ConvertFrom-Yaml $content -ErrorAction Stop
+
+        # ConvertFrom-Yaml returns OrderedDictionary, convert to hashtable for consistency
+        if ($config -is [System.Collections.Specialized.OrderedDictionary]) {
+            $config = Convert-OrderedDictToHashtable $config
         }
 
-        # Calculate indent level (normalize tabs to 2 spaces)
-        $normalizedLine = $line -replace "`t", "  "
-        $indent = 0
-        if ($normalizedLine -match '^(\s*)') {
-            $indent = $Matches[1].Length
-        }
+        return $config
+    } catch {
+        Write-Status "YAML parse error in ${Path}: $($_.Exception.Message)" "Error"
+        throw "Failed to parse YAML config: $Path"
+    }
+}
 
-        # List item (starts with -)
-        if ($normalizedLine -match '^\s*-\s*(.*)$') {
-            $listValue = $Matches[1].Trim().Trim('"').Trim("'")
+function Convert-OrderedDictToHashtable {
+    param($OrderedDict)
 
-            # Convert string booleans
-            if ($listValue -eq 'true') { $listValue = $true }
-            elseif ($listValue -eq 'false') { $listValue = $false }
-
-            # Skip empty list items
-            if ($listValue -eq '') { continue }
-
-            # Add to appropriate list based on where we are
-            if ($currentListKey -and $currentListLevel -eq 2 -and $currentSection -and $currentSubSection) {
-                $config[$currentSection][$currentSubSection] += @($listValue)
-            }
-            elseif ($currentListKey -and $currentListLevel -eq 1 -and $currentSection) {
-                $config[$currentSection][$currentListKey] += @($listValue)
-            }
-            continue
-        }
-
-        # Top-level key with value (no indent)
-        if ($indent -eq 0 -and $normalizedLine -match '^(\w+):\s*(.+)$') {
-            $key = $Matches[1]
-            $value = $Matches[2].Trim().Trim('"').Trim("'")
-
-            if ($value -eq 'true') { $value = $true }
-            elseif ($value -eq 'false') { $value = $false }
-
-            $config[$key] = $value
-            $currentSection = $null
-            $currentSubSection = $null
-            $currentListKey = $null
-        }
-        # Section header (no value after colon, no indent)
-        elseif ($indent -eq 0 -and $normalizedLine -match '^(\w+):\s*$') {
-            $currentSection = $Matches[1]
-            $config[$currentSection] = @{}
-            $currentSubSection = $null
-            $currentListKey = $null
-        }
-        # Nested key-value (indent level 1: 2-4 spaces)
-        elseif ($indent -ge 2 -and $indent -le 4 -and $normalizedLine -match '^\s+(\w+):\s*(.+)$' -and $currentSection -and -not $currentSubSection) {
-            $key = $Matches[1]
-            $value = $Matches[2].Trim().Trim('"').Trim("'")
-
-            if ($value -eq 'true') { $value = $true }
-            elseif ($value -eq 'false') { $value = $false }
-
-            $config[$currentSection][$key] = $value
-            $currentListKey = $null
-        }
-        # List key at section level (indent level 1, no value - starts a list)
-        elseif ($indent -ge 2 -and $indent -le 4 -and $normalizedLine -match '^\s+(\w+):\s*$' -and $currentSection -and -not $currentSubSection) {
-            $key = $Matches[1]
-            # Could be a subsection or a list - we'll find out from next line
-            # For now, initialize as empty array (lists) - will be converted to hashtable if needed
-            $config[$currentSection][$key] = @()
-            $currentListKey = $key
-            $currentListLevel = 1
-            $currentSubSection = $null
-        }
-        # Sub-section header or nested key (indent level 2: 4-6 spaces)
-        elseif ($indent -ge 4 -and $indent -le 6 -and $normalizedLine -match '^\s+(\w+):\s*$' -and $currentSection) {
-            # This is a subsection under the current section
-            $currentSubSection = $Matches[1]
-            # If parent was an empty array, convert to hashtable
-            if ($currentListKey -and $config[$currentSection][$currentListKey] -is [array] -and $config[$currentSection][$currentListKey].Count -eq 0) {
-                $config[$currentSection][$currentListKey] = @{}
-            }
-            if ($currentListKey) {
-                $config[$currentSection][$currentListKey][$currentSubSection] = @()
-                $currentListLevel = 2
-            } else {
-                $config[$currentSection][$currentSubSection] = @{}
-            }
-        }
-        # Sub-nested key-value (indent level 2: 4-6 spaces)
-        elseif ($indent -ge 4 -and $indent -le 6 -and $normalizedLine -match '^\s+(\w+):\s*(.+)$' -and $currentSection -and $currentSubSection) {
-            $key = $Matches[1]
-            $value = $Matches[2].Trim().Trim('"').Trim("'")
-
-            if ($value -eq 'true') { $value = $true }
-            elseif ($value -eq 'false') { $value = $false }
-
-            $config[$currentSection][$currentSubSection][$key] = $value
-            $currentListKey = $null
+    $hashtable = @{}
+    foreach ($key in $OrderedDict.Keys) {
+        $value = $OrderedDict[$key]
+        if ($value -is [System.Collections.Specialized.OrderedDictionary]) {
+            $hashtable[$key] = Convert-OrderedDictToHashtable $value
+        } elseif ($value -is [System.Collections.IList] -and $value -isnot [string]) {
+            $hashtable[$key] = @($value | ForEach-Object {
+                if ($_ -is [System.Collections.Specialized.OrderedDictionary]) {
+                    Convert-OrderedDictToHashtable $_
+                } else {
+                    $_
+                }
+            })
+        } else {
+            $hashtable[$key] = $value
         }
     }
-
-    return $config
+    return $hashtable
 }
 
 function Merge-Configs {
@@ -262,7 +292,8 @@ function Install-WingetPackage {
 
     # Check if already installed first (even in DryRun)
     try {
-        $installed = winget list --id $PackageId --source winget --accept-source-agreements 2>$null
+        # Check both sources for existing installation
+        $installed = winget list --id $PackageId --accept-source-agreements 2>$null
         if ($installed -match $PackageId) {
             Write-Status "$Name already installed - skipping" "Success"
             return $true
@@ -272,28 +303,51 @@ function Install-WingetPackage {
     }
 
     if ($Script:DryRun) {
-        # Validate package exists in winget
+        # Validate package exists (check winget first, then msstore)
         Write-Host "    Validating $PackageId..." -ForegroundColor Gray -NoNewline
-        $showResult = winget show --id $PackageId --source winget --accept-source-agreements 2>&1
-        if ($LASTEXITCODE -eq 0 -and $showResult -match "Found") {
-            Write-Host " OK" -ForegroundColor Green
-            Write-Status "[DRY RUN] Would install: $Name ($PackageId)" "Info"
+
+        $foundInWinget = $false
+        $foundInMsStore = $false
+
+        if ($Script:HasWingetSource) {
+            $showResult = winget show --id $PackageId --source winget --accept-source-agreements 2>&1
+            if ($LASTEXITCODE -eq 0 -and $showResult -match "Found") {
+                $foundInWinget = $true
+            }
+        }
+
+        if (-not $foundInWinget -and $Script:HasMsStoreSource) {
+            $showResult = winget show --id $PackageId --source msstore --accept-source-agreements 2>&1
+            if ($LASTEXITCODE -eq 0 -and $showResult -match "Found") {
+                $foundInMsStore = $true
+            }
+        }
+
+        if ($foundInWinget) {
+            Write-Host " OK (winget)" -ForegroundColor Green
+            Write-Status "[DRY RUN] Would install: $Name ($PackageId) from winget" "Info"
+            return $true
+        } elseif ($foundInMsStore) {
+            Write-Host " OK (msstore)" -ForegroundColor Yellow
+            Write-Status "[DRY RUN] Would install: $Name ($PackageId) from msstore (fallback)" "Info"
             return $true
         } else {
             Write-Host " NOT FOUND" -ForegroundColor Red
-            Write-Status "[DRY RUN] Package not found: $PackageId" "Warning"
+            Write-Status "[DRY RUN] Package not found in any source: $PackageId" "Warning"
             return $false
         }
     }
 
     Write-Status "Installing $Name..." "Info"
-    try {
-        # Use winget source only (not msstore) and x64 architecture
+
+    # Try winget source first
+    if ($Script:HasWingetSource) {
+        Write-Host "    Trying winget source..." -ForegroundColor Gray
         $result = winget install --id $PackageId --source winget --architecture x64 --accept-source-agreements --accept-package-agreements --silent 2>&1
         $exitCode = $LASTEXITCODE
 
         if ($exitCode -eq 0) {
-            Write-Status "$Name installed" "Success"
+            Write-Status "$Name installed (winget)" "Success"
             return $true
         }
 
@@ -303,22 +357,35 @@ function Install-WingetPackage {
             $result = winget install --id $PackageId --source winget --accept-source-agreements --accept-package-agreements --silent 2>&1
             $exitCode = $LASTEXITCODE
             if ($exitCode -eq 0) {
-                Write-Status "$Name installed" "Success"
+                Write-Status "$Name installed (winget)" "Success"
                 return $true
             }
         }
 
-        # Show actual error output
-        Write-Status "Failed to install $Name (exit code $exitCode)" "Warning"
-        $errorLines = $result | Where-Object { $_ -match "error|fail|not found|applicable" } | Select-Object -First 3
-        foreach ($line in $errorLines) {
-            Write-Host "    $line" -ForegroundColor Yellow
-        }
-        return $false
-    } catch {
-        Write-Status "Failed to install $Name : $_" "Error"
-        return $false
+        Write-Host "    Winget source failed (exit code $exitCode)" -ForegroundColor Yellow
     }
+
+    # Fallback to msstore
+    if ($Script:HasMsStoreSource) {
+        Write-Host "    Falling back to msstore..." -ForegroundColor Yellow
+        $result = winget install --id $PackageId --source msstore --accept-source-agreements --accept-package-agreements --silent 2>&1
+        $exitCode = $LASTEXITCODE
+
+        if ($exitCode -eq 0) {
+            Write-Status "$Name installed (msstore fallback)" "Success"
+            return $true
+        }
+
+        Write-Host "    msstore also failed (exit code $exitCode)" -ForegroundColor Red
+    }
+
+    # Both sources failed - show error details
+    Write-Status "Failed to install $Name from all sources" "Warning"
+    $errorLines = $result | Where-Object { $_ -match "error|fail|not found|applicable" } | Select-Object -First 3
+    foreach ($line in $errorLines) {
+        Write-Host "    $line" -ForegroundColor Yellow
+    }
+    return $false
 }
 
 # ============================================================================
@@ -355,6 +422,19 @@ if (-not (Test-WingetInstalled)) {
     }
 }
 Write-Status "Winget available" "Success"
+
+# Initialize and verify winget sources
+if (-not (Initialize-WingetSources)) {
+    Write-Status "No package sources available - cannot continue" "Error"
+    exit 1
+}
+
+# Ensure YAML module is available for config parsing
+if (-not (Ensure-YamlModule)) {
+    Write-Status "Cannot parse YAML configs without powershell-yaml module" "Error"
+    exit 1
+}
+Write-Status "YAML parser ready" "Success"
 
 # Load configuration
 # Priority: -ConfigFile > private repo > local ~/.config > defaults

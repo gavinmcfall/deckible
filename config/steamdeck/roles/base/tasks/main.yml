@@ -196,9 +196,11 @@
 - name: Move existing shader cache to SD card
   ansible.builtin.shell: |
     if [ -d "{{ deck_home }}/.steam/steam/steamapps/shadercache" ] && [ ! -L "{{ deck_home }}/.steam/steam/steamapps/shadercache" ]; then
-      rsync -a --remove-source-files "{{ deck_home }}/.steam/steam/steamapps/shadercache/" "{{ sdcard_path }}/steamapps/shadercache/"
-      rm -rf "{{ deck_home }}/.steam/steam/steamapps/shadercache"
+      rsync -a --remove-source-files "{{ deck_home }}/.steam/steam/steamapps/shadercache/" "{{ sdcard_path }}/steamapps/shadercache/" && \
+        rm -rf "{{ deck_home }}/.steam/steam/steamapps/shadercache"
     fi
+  register: shader_move_result
+  failed_when: shader_move_result.rc != 0
   when:
     - should_move_shader_cache
     - not shadercache_is_symlink

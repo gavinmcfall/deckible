@@ -39,3 +39,7 @@ Desktop.ini
 # Repoql
 .repoql/
 
+# AI Context (local only, never pushed)
+docs/ai-context/
+.claude/
+AGENTS.md

@@ -166,6 +166,9 @@ install_ansible() {
 
     # Fall back to pacman
     echo "  Using pacman..."
+
+    # Set trap to restore read-only mode on exit/error
+    trap 'sudo steamos-readonly enable 2>/dev/null' EXIT
     sudo steamos-readonly disable 2>/dev/null || true
 
     # Refresh keyring to avoid PGP signature errors
@@ -175,6 +178,9 @@ install_ansible() {
     sudo pacman -Sy --noconfirm archlinux-keyring 2>/dev/null || true
 
     sudo pacman -S --noconfirm ansible
+
+    # Clear trap and restore read-only (trap will fire on exit anyway)
+    trap - EXIT
     sudo steamos-readonly enable 2>/dev/null || true
     echo -e "${GREEN}✓${NC} Ansible installed via pacman"
 }
