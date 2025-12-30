@@ -115,28 +115,26 @@ if ($staticIpEnabled) {
 # WINGET SETUP
 # =============================================================================
 
-# Aggressively refresh winget sources to avoid stale package data
-# Error -1978335138 (0x8A150014) = "No applicable installer found" often means stale sources
-Write-Status "Refreshing winget sources..." "Info"
+# Refresh winget source (skip msstore which often has issues)
+Write-Status "Refreshing winget source..." "Info"
 try {
-    # First, reset sources to ensure clean state
-    Write-Host "    Resetting winget sources..." -ForegroundColor Gray
-    $null = winget source reset --force 2>&1
+    # Reset and update only the winget source
+    Write-Host "    Resetting winget source..." -ForegroundColor Gray
+    $null = winget source reset --name winget --force 2>&1
 
-    # Then update with fresh data
     Write-Host "    Updating package index..." -ForegroundColor Gray
-    $null = winget source update --accept-source-agreements 2>&1
+    $null = winget source update --name winget --accept-source-agreements 2>&1
 
-    # Verify sources are working by doing a quick search
-    $testResult = winget search "Microsoft.PowerShell" --accept-source-agreements 2>&1
+    # Verify source is working
+    $testResult = winget search "Microsoft.PowerShell" --source winget --accept-source-agreements 2>&1
     if ($testResult -match "Microsoft.PowerShell") {
-        Write-Status "Winget sources refreshed and verified" "Success"
+        Write-Status "Winget source refreshed and verified" "Success"
     } else {
-        Write-Status "Winget sources updated but verification unclear" "Warning"
+        Write-Status "Winget source updated but verification unclear" "Warning"
     }
 } catch {
-    Write-Status "Could not refresh winget sources: $_" "Warning"
-    Write-Status "Some package installs may fail - try running 'winget source reset --force' manually" "Info"
+    Write-Status "Could not refresh winget source: $_" "Warning"
+    Write-Status "Try running 'winget source reset --name winget --force' manually" "Info"
 }
 
 # Install essential utilities

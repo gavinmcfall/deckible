@@ -262,7 +262,7 @@ function Install-WingetPackage {
 
     # Check if already installed first (even in DryRun)
     try {
-        $installed = winget list --id $PackageId --accept-source-agreements 2>$null
+        $installed = winget list --id $PackageId --source winget --accept-source-agreements 2>$null
         if ($installed -match $PackageId) {
             Write-Status "$Name already installed - skipping" "Success"
             return $true
@@ -278,8 +278,8 @@ function Install-WingetPackage {
 
     Write-Status "Installing $Name..." "Info"
     try {
-        # Use x64 architecture explicitly for ROG Ally
-        $result = winget install --id $PackageId --architecture x64 --accept-source-agreements --accept-package-agreements --silent 2>&1
+        # Use winget source only (not msstore) and x64 architecture
+        $result = winget install --id $PackageId --source winget --architecture x64 --accept-source-agreements --accept-package-agreements --silent 2>&1
         $exitCode = $LASTEXITCODE
 
         if ($exitCode -eq 0) {
@@ -290,7 +290,7 @@ function Install-WingetPackage {
         # If x64 failed, try without architecture constraint
         if ($exitCode -eq -1978335138) {
             Write-Host "    x64 not available, trying any architecture..." -ForegroundColor Gray
-            $result = winget install --id $PackageId --accept-source-agreements --accept-package-agreements --silent 2>&1
+            $result = winget install --id $PackageId --source winget --accept-source-agreements --accept-package-agreements --silent 2>&1
             $exitCode = $LASTEXITCODE
             if ($exitCode -eq 0) {
                 Write-Status "$Name installed" "Success"
