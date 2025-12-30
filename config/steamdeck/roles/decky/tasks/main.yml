@@ -107,6 +107,24 @@
   ansible.builtin.set_fact:
     enabled_plugins: "{{ decky_plugins | dict2items | selectattr('value.enabled', 'equalto', true) | list }}"
 
+# Warn about rate limits if many plugins without token
+- name: Warn about GitHub rate limits
+  ansible.builtin.debug:
+    msg: |
+      ⚠️  WARNING: Installing {{ enabled_plugins | length }} plugins without a GitHub token!
+
+      GitHub API has a rate limit of 60 requests/hour for unauthenticated users.
+      With {{ enabled_plugins | length }} plugins, you may hit this limit and get partial installs.
+
+      To avoid this, add a GitHub token to your config:
+        github_token: "ghp_your_token_here"
+
+      Create a token at: https://github.com/settings/tokens
+      (No special permissions needed - just create a classic token)
+  when:
+    - enabled_plugins | length > 3
+    - github_token is not defined or github_token == ""
+
 # Download and install each enabled plugin
 - name: Download and install Decky plugins
   ansible.builtin.include_tasks: install_plugin.yml
