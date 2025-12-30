@@ -272,8 +272,18 @@ function Install-WingetPackage {
     }
 
     if ($Script:DryRun) {
-        Write-Status "[DRY RUN] Would install: $Name ($PackageId)" "Info"
-        return $true
+        # Validate package exists in winget
+        Write-Host "    Validating $PackageId..." -ForegroundColor Gray -NoNewline
+        $showResult = winget show --id $PackageId --source winget --accept-source-agreements 2>&1
+        if ($LASTEXITCODE -eq 0 -and $showResult -match "Found") {
+            Write-Host " OK" -ForegroundColor Green
+            Write-Status "[DRY RUN] Would install: $Name ($PackageId)" "Info"
+            return $true
+        } else {
+            Write-Host " NOT FOUND" -ForegroundColor Red
+            Write-Status "[DRY RUN] Package not found: $PackageId" "Warning"
+            return $false
+        }
     }
 
     Write-Status "Installing $Name..." "Info"
@@ -314,6 +324,14 @@ function Install-WingetPackage {
 # ============================================================================
 # MAIN EXECUTION
 # ============================================================================
+
+# Start logging
+$logsDir = Join-Path $Script:BootibleRoot "logs"
+if (-not (Test-Path $logsDir)) { New-Item -ItemType Directory -Path $logsDir -Force | Out-Null }
+$timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
+$runType = if ($DryRun) { "dryrun" } else { "run" }
+$Script:LogFile = Join-Path $logsDir "$($env:COMPUTERNAME)_$runType`_$timestamp.log"
+Start-Transcript -Path $Script:LogFile -Force | Out-Null
 
 Write-Host ""
 Write-Host "+------------------------------------------------------------+" -ForegroundColor Cyan
@@ -494,28 +512,28 @@ Write-Host "  MAC Address: $($networkInfo.MACAddress)"
 Write-Host "  Interface:   $($networkInfo.Interface)"
 Write-Host ""
 
-if (-not $Script:DryRun) {
-    # Push any changes to git (useful for sharing logs/state)
-    if (Test-Path (Join-Path $Script:BootibleRoot ".git")) {
-        Write-Status "Pushing changes to git..." "Info"
-        try {
-            Push-Location $Script:BootibleRoot
-            $null = git add -A 2>&1
-            $hasChanges = git status --porcelain 2>&1
-            if ($hasChanges) {
-                $null = git commit -m "auto: post-run state from $env:COMPUTERNAME $(Get-Date -Format 'yyyy-MM-dd HH:mm')" 2>&1
-                $null = git push 2>&1
-                Write-Status "Changes pushed to git" "Success"
-            } else {
-                Write-Status "No changes to push" "Info"
-            }
-            Pop-Location
-        } catch {
-            Write-Status "Could not push to git: $_" "Warning"
-            Pop-Location
-        }
-    }
+# Stop logging and push to git
+Stop-Transcript | Out-Null
+Write-Host "Log saved: $Script:LogFile" -ForegroundColor Gray
 
+if (Test-Path (Join-Path $Script:BootibleRoot ".git")) {
+    Write-Host "Pushing log to git..." -ForegroundColor Gray
+    try {
+        Push-Location $Script:BootibleRoot
+        $null = git add logs/ 2>&1
+        $runTypeLabel = if ($Script:DryRun) { "dry-run" } else { "run" }
+        $null = git commit -m "log: $runTypeLabel from $env:COMPUTERNAME $(Get-Date -Format 'yyyy-MM-dd HH:mm')" 2>&1
+        $null = git push 2>&1
+        Write-Host "Log pushed to git" -ForegroundColor Green
+        Pop-Location
+    } catch {
+        Write-Host "Could not push log: $_" -ForegroundColor Yellow
+        Pop-Location
+    }
+}
+
+if (-not $Script:DryRun) {
+    Write-Host ""
     Write-Host "Next steps:" -ForegroundColor Yellow
     Write-Host "  - Restart your device to apply all changes"
     Write-Host "  - Configure Armoury Crate for performance profiles"
