@@ -30,7 +30,9 @@ const ROUTES = {
 
 const README_URL = `${GITHUB_RAW_BASE}/README.md`;
 
-const SCRIPT_CACHE_TTL = 60; // 1 minute (short for testing)
+// Cache settings
+const SCRIPT_CACHE_TTL = 300; // 5 minutes - how long to serve cached scripts
+const STALE_CACHE_TTL = 86400; // 24 hours - how long to keep stale cache as fallback
 
 /**
  * Compute SHA256 hash of content using Web Crypto API
@@ -622,57 +624,106 @@ export default {
       }
     }
 
-    // Handle script routes (proxy from GitHub with integrity verification)
+    // Handle script routes (proxy from GitHub with caching and integrity verification)
     const route = ROUTES[path];
     if (route) {
-      // Add cache-buster to bypass GitHub's raw CDN cache
-      const cacheBuster = Date.now();
-      const scriptUrl = `${GITHUB_RAW_BASE}${route.path}?cb=${cacheBuster}`;
+      const cache = caches.default;
+      const cacheKey = new Request(`https://bootible.dev/cache${route.path}`, request);
+
+      // Try to get from cache first
+      let cachedResponse = await cache.match(cacheKey);
+      const cacheAge = cachedResponse
+        ? parseInt(cachedResponse.headers.get('X-Bootible-Cached-At') || '0')
+        : 0;
+      const cacheIsStale = Date.now() - cacheAge > SCRIPT_CACHE_TTL * 1000;
+
+      // If cache is fresh, serve it directly
+      if (cachedResponse && !cacheIsStale) {
+        const headers = new Headers(cachedResponse.headers);
+        headers.set('X-Bootible-Cache', 'HIT');
+        return new Response(cachedResponse.body, {
+          status: cachedResponse.status,
+          headers,
+        });
+      }
+
+      // Try to fetch fresh from GitHub
+      let script = null;
+      let fetchError = null;
 
       try {
+        const cacheBuster = Date.now();
+        const scriptUrl = `${GITHUB_RAW_BASE}${route.path}?cb=${cacheBuster}`;
+
         const response = await fetch(scriptUrl, {
           headers: { 'Cache-Control': 'no-cache' },
         });
 
-        if (!response.ok) {
-          return new Response(`Failed to fetch script: ${response.status}`, {
-            status: 502,
-            headers: { 'Content-Type': 'text/plain' },
-          });
+        if (response.ok) {
+          script = await response.text();
+
+          // Verify script integrity
+          const computedHash = await sha256(script);
+          if (computedHash !== route.sha256) {
+            console.error(`Integrity check failed for ${route.path}: expected ${route.sha256}, got ${computedHash}`);
+            script = null; // Don't use tampered script
+            fetchError = `Integrity verification failed (expected ${route.sha256.slice(0, 8)}..., got ${computedHash.slice(0, 8)}...)`;
+          }
+        } else {
+          fetchError = `GitHub returned ${response.status}`;
         }
+      } catch (error) {
+        fetchError = `Fetch failed: ${error.message || error}`;
+      }
 
-        const script = await response.text();
+      // If we got a valid script, cache it and serve
+      if (script) {
+        const responseHeaders = {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'X-Bootible-Device': route.description,
+          'X-Bootible-Integrity': `sha256-${route.sha256}`,
+          'X-Bootible-Cache': cachedResponse ? 'REFRESH' : 'MISS',
+          'X-Bootible-Cached-At': String(Date.now()),
+        };
 
-        // Verify script integrity before serving
-        const computedHash = await sha256(script);
-        if (computedHash !== route.sha256) {
-          console.error(`Integrity check failed for ${route.path}: expected ${route.sha256}, got ${computedHash}`);
-          return new Response(
-            `Script integrity verification failed. The script may have been tampered with.\n` +
-            `Expected: ${route.sha256}\n` +
-            `Got: ${computedHash}\n\n` +
-            `Please report this issue at https://github.com/gavinmcfall/bootible/issues`,
-            {
-              status: 500,
-              headers: { 'Content-Type': 'text/plain' },
-            }
-          );
-        }
+        const freshResponse = new Response(script, { headers: responseHeaders });
 
-        return new Response(script, {
+        // Cache the response (clone because body can only be read once)
+        const cacheResponse = new Response(script, {
           headers: {
-            'Content-Type': 'text/plain; charset=utf-8',
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'X-Bootible-Device': route.description,
-            'X-Bootible-Integrity': `sha256-${computedHash}`,
+            ...responseHeaders,
+            'Cache-Control': `public, max-age=${STALE_CACHE_TTL}`,
           },
         });
-      } catch (error) {
-        return new Response(`Error fetching script: ${error}`, {
-          status: 502,
-          headers: { 'Content-Type': 'text/plain' },
+        await cache.put(cacheKey, cacheResponse);
+
+        return freshResponse;
+      }
+
+      // GitHub failed - try stale cache as fallback
+      if (cachedResponse) {
+        console.warn(`GitHub unavailable, serving stale cache for ${route.path}: ${fetchError}`);
+        const headers = new Headers(cachedResponse.headers);
+        headers.set('X-Bootible-Cache', 'STALE');
+        headers.set('X-Bootible-Stale-Reason', fetchError);
+        return new Response(cachedResponse.body, {
+          status: cachedResponse.status,
+          headers,
         });
       }
+
+      // No cache and GitHub failed
+      return new Response(
+        `Failed to fetch script and no cached version available.\n` +
+        `Error: ${fetchError}\n\n` +
+        `GitHub may be temporarily unavailable. Please try again in a few minutes.\n` +
+        `If the problem persists, report at https://github.com/gavinmcfall/bootible/issues`,
+        {
+          status: 502,
+          headers: { 'Content-Type': 'text/plain' },
+        }
+      );
     }
 
     // Static assets - let Pages serve them
