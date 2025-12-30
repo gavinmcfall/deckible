@@ -36,6 +36,29 @@ function isBrowser(request) {
 }
 
 /**
+ * Escape HTML special characters to prevent XSS
+ */
+function escapeHtml(text) {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * Sanitize URL to prevent javascript: and data: XSS attacks
+ */
+function sanitizeUrl(url) {
+  const trimmed = url.trim().toLowerCase();
+  if (trimmed.startsWith('javascript:') || trimmed.startsWith('data:') || trimmed.startsWith('vbscript:')) {
+    return '#blocked';
+  }
+  return escapeHtml(url);
+}
+
+/**
  * Markdown to HTML converter
  */
 function markdownToHtml(md) {
@@ -43,24 +66,22 @@ function markdownToHtml(md) {
 
   const codeBlocks = [];
   html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
-    const escaped = code.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    codeBlocks.push(`<pre><code class="language-${lang}">${escaped}</code></pre>`);
+    codeBlocks.push(`<pre><code class="language-${escapeHtml(lang)}">${escapeHtml(code)}</code></pre>`);
     return `__CODE_BLOCK_${codeBlocks.length - 1}__`;
   });
 
   const inlineCodes = [];
   html = html.replace(/`([^`]+)`/g, (_, code) => {
-    const escaped = code.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    inlineCodes.push(`<code>${escaped}</code>`);
+    inlineCodes.push(`<code>${escapeHtml(code)}</code>`);
     return `__INLINE_CODE_${inlineCodes.length - 1}__`;
   });
 
   html = html.replace(/^\|(.+)\|\n\|[-| :]+\|\n((?:\|.+\|\n?)+)/gm, (_, header, body) => {
     const headerCells = header.split('|').map(c => c.trim()).filter(Boolean);
-    const headerRow = headerCells.map(c => `<th>${c}</th>`).join('');
+    const headerRow = headerCells.map(c => `<th>${escapeHtml(c)}</th>`).join('');
     const bodyRows = body.trim().split('\n').map(row => {
       const cells = row.split('|').map(c => c.trim()).filter(Boolean);
-      return `<tr>${cells.map(c => `<td>${c}</td>`).join('')}</tr>`;
+      return `<tr>${cells.map(c => `<td>${escapeHtml(c)}</td>`).join('')}</tr>`;
     }).join('\n');
     return `<table><thead><tr>${headerRow}</tr></thead><tbody>${bodyRows}</tbody></table>`;
   });
@@ -68,8 +89,12 @@ function markdownToHtml(md) {
   html = html.replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>');
   html = html.replace(/<\/blockquote>\n<blockquote>/g, '\n');
   html = html.replace(/^---+$/gm, '<hr>');
-  html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1">');
-  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+  html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, src) =>
+    `<img src="${sanitizeUrl(src)}" alt="${escapeHtml(alt)}">`
+  );
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, text, href) =>
+    `<a href="${sanitizeUrl(href)}" target="_blank">${text}</a>`
+  );
   html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
   html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
   html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
