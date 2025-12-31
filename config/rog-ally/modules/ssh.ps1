@@ -148,18 +148,28 @@ if ($importAuthorizedKeys -and $authorizedKeysList.Count -gt 0) {
             }
 
             # Build authorized_keys content from private repo
+            # Check both possible locations: ssh-keys/ and files/ssh-keys/
             $keysContent = @()
             $privateRepoPath = $Script:PrivateRoot
-            $keysDir = Join-Path $privateRepoPath "files\ssh-keys"
+            $keysDirs = @(
+                (Join-Path $privateRepoPath "ssh-keys"),
+                (Join-Path $privateRepoPath "files\ssh-keys")
+            )
 
             foreach ($keyFile in $authorizedKeysList) {
-                $keyPath = Join-Path $keysDir $keyFile
-                if (Test-Path $keyPath) {
-                    $keyContent = Get-Content $keyPath -Raw
-                    $keysContent += $keyContent.Trim()
-                    Write-Status "Added key: $keyFile" "Info"
-                } else {
-                    Write-Status "Key file not found: $keyFile" "Warning"
+                $keyFound = $false
+                foreach ($keysDir in $keysDirs) {
+                    $keyFilePath = Join-Path $keysDir $keyFile
+                    if (Test-Path $keyFilePath) {
+                        $keyContent = Get-Content $keyFilePath -Raw
+                        $keysContent += $keyContent.Trim()
+                        Write-Status "Added key: $keyFile" "Info"
+                        $keyFound = $true
+                        break
+                    }
+                }
+                if (-not $keyFound) {
+                    Write-Status "Key file not found: $keyFile (checked ssh-keys/ and files/ssh-keys/)" "Warning"
                 }
             }
 
@@ -170,19 +180,12 @@ if ($importAuthorizedKeys -and $authorizedKeysList.Count -gt 0) {
                 # Set correct permissions for Windows OpenSSH
                 if ($isAdmin) {
                     # administrators_authorized_keys needs special ACL
-                    $acl = Get-Acl $authorizedKeysPath
-                    $acl.SetAccessRuleProtection($true, $false)
-
-                    # Only SYSTEM and Administrators should have access
-                    $systemRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
-                        "SYSTEM", "FullControl", "None", "None", "Allow"
-                    )
-                    $adminRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
-                        "Administrators", "FullControl", "None", "None", "Allow"
-                    )
-                    $acl.AddAccessRule($systemRule)
-                    $acl.AddAccessRule($adminRule)
-                    Set-Acl $authorizedKeysPath $acl
+                    # Use icacls directly - PowerShell ACL commands don't always work correctly
+                    Write-Host "    Setting permissions on administrators_authorized_keys..." -ForegroundColor Gray
+                    icacls $authorizedKeysPath /inheritance:r /grant "SYSTEM:F" /grant "Administrators:F" | Out-Null
+                    if ($LASTEXITCODE -ne 0) {
+                        Write-Status "Warning: Could not set permissions with icacls" "Warning"
+                    }
                 }
 
                 Write-Status "Authorized keys imported ($($keysContent.Count) keys)" "Success"
