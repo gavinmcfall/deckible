@@ -750,9 +750,11 @@ function Select-Config {
 function Install-BootibleCommand {
     Write-Status "Installing 'bootible' command..." "Info"
 
+    # Run ally.ps1 (not Run.ps1 directly) so config selection happens
+    $allyScript = Join-Path $BootibleDir "targets\ally.ps1"
     $cmdContent = @"
 @echo off
-powershell -ExecutionPolicy Bypass -Command "& '$BootibleDir\config\$Device\Run.ps1' %*"
+powershell -ExecutionPolicy Bypass -File "$allyScript" %*
 "@
 
     # Try WindowsApps first (already in PATH)
