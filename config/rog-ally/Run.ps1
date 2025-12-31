@@ -820,31 +820,44 @@ if (-not $Script:TranscriptInherited) {
             $ErrorActionPreference = "Continue"
             try {
                 $runType = if ($Script:DryRun) { "dry run" } else { "run" }
-                & git add "logs/rog-ally/$logFileName" 2>$null
-                & git commit -m "log: rog-ally $runType $(Get-Date -Format 'yyyy-MM-dd HH:mm')" 2>$null
+                $logRelPath = "logs/rog-ally/$logFileName"
 
-                # Try push - if SSH fails, temporarily disable and retry with HTTPS
-                cmd /c "git push 2>nul"
-                if ($LASTEXITCODE -ne 0) {
-                    # Check if SSH rewrite is configured
-                    $sshConfig = git config --global --get url."git@github.com:".insteadOf 2>$null
-                    if ($sshConfig) {
-                        Write-Host "[!] SSH push failed, retrying with HTTPS..." -ForegroundColor Yellow
-                        # Temporarily unset SSH rewrite
-                        git config --global --unset url."git@github.com:".insteadOf 2>$null
-                        cmd /c "git push 2>nul"
-                        # Restore SSH config if push succeeded (key might work next time)
-                        # Don't restore if it still fails - leave as HTTPS
-                        if ($LASTEXITCODE -ne 0) {
-                            Write-Host "[!] HTTPS push also failed" -ForegroundColor Yellow
-                        }
-                    }
-                }
-
-                if ($LASTEXITCODE -eq 0) {
-                    Write-Host "[OK] Log pushed to private repo" -ForegroundColor Green
+                # Verify log file exists before attempting git operations
+                if (-not (Test-Path $logRelPath)) {
+                    Write-Host "[!] Log file not found: $logRelPath" -ForegroundColor Yellow
                 } else {
-                    Write-Host "[!] Could not push log" -ForegroundColor Yellow
+                    & git add $logRelPath 2>$null
+
+                    # Check if there's anything to commit
+                    $status = & git status --porcelain $logRelPath 2>$null
+                    if ($status) {
+                        & git commit -m "log: rog-ally $runType $(Get-Date -Format 'yyyy-MM-dd HH:mm')" 2>$null
+                        $commitExit = $LASTEXITCODE
+
+                        if ($commitExit -eq 0) {
+                            # Try push - if SSH fails, temporarily disable and retry with HTTPS
+                            cmd /c "git push 2>nul"
+                            if ($LASTEXITCODE -ne 0) {
+                                # Check if SSH rewrite is configured
+                                $sshConfig = git config --global --get url."git@github.com:".insteadOf 2>$null
+                                if ($sshConfig) {
+                                    Write-Host "[!] SSH push failed, retrying with HTTPS..." -ForegroundColor Yellow
+                                    git config --global --unset url."git@github.com:".insteadOf 2>$null
+                                    cmd /c "git push 2>nul"
+                                }
+                            }
+
+                            if ($LASTEXITCODE -eq 0) {
+                                Write-Host "[OK] Log pushed to private repo" -ForegroundColor Green
+                            } else {
+                                Write-Host "[!] Commit saved locally, push failed" -ForegroundColor Yellow
+                            }
+                        } else {
+                            Write-Host "[!] Failed to commit log" -ForegroundColor Yellow
+                        }
+                    } else {
+                        Write-Host "[OK] Log saved (no changes to push)" -ForegroundColor Gray
+                    }
                 }
             } finally {
                 $ErrorActionPreference = $prevEAP

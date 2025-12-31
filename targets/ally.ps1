@@ -965,13 +965,34 @@ function Main {
                 $ErrorActionPreference = "Continue"
                 try {
                     $runType = if ($DryRun) { "dry run" } else { "run" }
-                    & git add "logs/$Device/$logFileName" 2>$null
-                    & git commit -m "log: $Device $runType $(Get-Date -Format 'yyyy-MM-dd HH:mm')" 2>$null
-                    cmd /c "git push 2>nul"
-                    if ($LASTEXITCODE -eq 0) {
-                        Write-Host "[OK] Log pushed to private repo" -ForegroundColor Green
+                    $logRelPath = "logs/$Device/$logFileName"
+
+                    # Verify log file exists before attempting git operations
+                    if (-not (Test-Path $logRelPath)) {
+                        Write-Host "[!] Log file not found: $logRelPath" -ForegroundColor Yellow
                     } else {
-                        Write-Host "[!] Could not push log" -ForegroundColor Yellow
+                        & git add $logRelPath 2>$null
+                        $addExit = $LASTEXITCODE
+
+                        # Check if there's anything to commit
+                        $status = & git status --porcelain $logRelPath 2>$null
+                        if ($status) {
+                            & git commit -m "log: $Device $runType $(Get-Date -Format 'yyyy-MM-dd HH:mm')" 2>$null
+                            $commitExit = $LASTEXITCODE
+
+                            if ($commitExit -eq 0) {
+                                cmd /c "git push 2>nul"
+                                if ($LASTEXITCODE -eq 0) {
+                                    Write-Host "[OK] Log pushed to private repo" -ForegroundColor Green
+                                } else {
+                                    Write-Host "[!] Commit saved locally, push failed" -ForegroundColor Yellow
+                                }
+                            } else {
+                                Write-Host "[!] Failed to commit log" -ForegroundColor Yellow
+                            }
+                        } else {
+                            Write-Host "[OK] Log saved (no changes to push)" -ForegroundColor Gray
+                        }
                     }
                 } finally {
                     $ErrorActionPreference = $prevEAP
