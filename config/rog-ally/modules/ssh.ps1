@@ -355,38 +355,27 @@ if ($saveToPrivate -and $privateRepoPath -and (Test-Path "$keyPath.pub")) {
 }
 
 # =============================================================================
-# CONFIGURE GIT TO USE SSH
+# SSH-AGENT SETUP (for manual SSH use)
 # =============================================================================
+# Don't auto-configure git to use SSH - too many edge cases.
+# User can manually run: git config --global url."git@github.com:".insteadOf "https://github.com/"
 
-$configureGitSsh = Get-ConfigValue "ssh_configure_git" $true
-
-if ($configureGitSsh) {
-    # Only switch git to SSH if the key is confirmed on GitHub
-    if (-not $Script:GitHubSshKeyReady) {
-        Write-Status "Skipping git SSH config - key not yet on GitHub" "Warning"
-        Write-Status "Run bootible again after adding SSH key to GitHub" "Info"
-    } elseif ($Script:DryRun) {
-        Write-Status "[DRY RUN] Would configure Git to use SSH for GitHub" "Info"
+# Just ensure ssh-agent is running and key is loaded for manual use
+if (Test-Path $keyPath) {
+    if ($Script:DryRun) {
+        Write-Status "[DRY RUN] Would add key to ssh-agent" "Info"
     } else {
-        Write-Status "Configuring Git to use SSH for GitHub..." "Info"
         try {
-            # Set Git to use SSH for GitHub URLs
-            # This rewrites https://github.com/ to git@github.com:
-            git config --global url."git@github.com:".insteadOf "https://github.com/"
-            Write-Status "Git configured to use SSH for GitHub" "Success"
-
-            # Ensure SSH key is in ssh-agent (for this session)
             $sshAgent = Get-Service ssh-agent -ErrorAction SilentlyContinue
-            if ($sshAgent -and $sshAgent.Status -ne 'Running') {
-                Start-Service ssh-agent -ErrorAction SilentlyContinue
-            }
-
-            # Add key to agent
-            if (Test-Path $keyPath) {
+            if ($sshAgent) {
+                if ($sshAgent.Status -ne 'Running') {
+                    Start-Service ssh-agent -ErrorAction SilentlyContinue
+                }
                 ssh-add $keyPath 2>&1 | Out-Null
+                Write-Status "SSH key added to ssh-agent" "Success"
             }
         } catch {
-            Write-Status "Git SSH configuration failed: $_" "Warning"
+            Write-Status "Could not add key to ssh-agent: $_" "Warning"
         }
     }
 }
