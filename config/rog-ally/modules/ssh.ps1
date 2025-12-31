@@ -262,6 +262,7 @@ if ($generateKey) {
 # =============================================================================
 
 $addToGithub = Get-ConfigValue "ssh_add_to_github" $true
+$Script:GitHubSshKeyReady = $false  # Track if key is ready on GitHub
 
 if ($addToGithub -and (Test-Path "$keyPath.pub")) {
     # Check if gh CLI is available and authenticated
@@ -278,6 +279,7 @@ if ($addToGithub -and (Test-Path "$keyPath.pub")) {
         } else {
             if ($Script:DryRun) {
                 Write-Status "[DRY RUN] Would add SSH key to GitHub: $keyComment" "Info"
+                $Script:GitHubSshKeyReady = $true
             } else {
                 Write-Status "Adding SSH key to GitHub..." "Info"
                 try {
@@ -288,15 +290,18 @@ if ($addToGithub -and (Test-Path "$keyPath.pub")) {
 
                     if ($existingKeys -match [regex]::Escape($keyComment)) {
                         Write-Status "SSH key '$keyComment' already exists on GitHub" "Info"
+                        $Script:GitHubSshKeyReady = $true
                     } else {
                         # Add the key
                         $result = gh ssh-key add "$keyPath.pub" --title $keyComment 2>&1
                         if ($LASTEXITCODE -eq 0) {
                             Write-Status "SSH key added to GitHub: $keyComment" "Success"
+                            $Script:GitHubSshKeyReady = $true
                         } else {
                             # Key might already exist with different title
                             if ($result -match "already in use") {
                                 Write-Status "SSH key already registered on GitHub (different title)" "Info"
+                                $Script:GitHubSshKeyReady = $true
                             } else {
                                 throw $result
                             }
@@ -356,7 +361,11 @@ if ($saveToPrivate -and $privateRepoPath -and (Test-Path "$keyPath.pub")) {
 $configureGitSsh = Get-ConfigValue "ssh_configure_git" $true
 
 if ($configureGitSsh) {
-    if ($Script:DryRun) {
+    # Only switch git to SSH if the key is confirmed on GitHub
+    if (-not $Script:GitHubSshKeyReady) {
+        Write-Status "Skipping git SSH config - key not yet on GitHub" "Warning"
+        Write-Status "Run bootible again after adding SSH key to GitHub" "Info"
+    } elseif ($Script:DryRun) {
         Write-Status "[DRY RUN] Would configure Git to use SSH for GitHub" "Info"
     } else {
         Write-Status "Configuring Git to use SSH for GitHub..." "Info"
