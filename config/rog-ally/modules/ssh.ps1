@@ -31,13 +31,23 @@ if ($enableSshServer) {
         Write-Status "[DRY RUN] Would install/enable OpenSSH Server" "Info"
     } else {
         try {
-            # Check if OpenSSH Server is installed
-            $sshServerCapability = Get-WindowsCapability -Online | Where-Object Name -like 'OpenSSH.Server*'
+            # Check if sshd service exists (OpenSSH Server installed)
+            $sshd = Get-Service -Name sshd -ErrorAction SilentlyContinue
 
-            if ($sshServerCapability.State -ne 'Installed') {
-                Write-Status "Installing OpenSSH Server..." "Info"
-                Add-WindowsCapability -Online -Name 'OpenSSH.Server~~~~0.0.1.0' | Out-Null
-                Write-Status "OpenSSH Server installed" "Success"
+            if (-not $sshd) {
+                Write-Status "Installing OpenSSH Server via winget..." "Info"
+                # Use winget - much faster than Add-WindowsCapability (which uses slow Windows Update)
+                $result = winget install --id Microsoft.OpenSSH.Beta --accept-source-agreements --accept-package-agreements --silent 2>&1
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Status "OpenSSH Server installed" "Success"
+                } else {
+                    # Fallback to Windows capability if winget fails
+                    Write-Status "Winget failed, trying Windows capability..." "Warning"
+                    Add-WindowsCapability -Online -Name 'OpenSSH.Server~~~~0.0.1.0' | Out-Null
+                    Write-Status "OpenSSH Server installed via Windows capability" "Success"
+                }
+                # Refresh service reference
+                $sshd = Get-Service -Name sshd -ErrorAction SilentlyContinue
             } else {
                 Write-Status "OpenSSH Server already installed" "Info"
             }
