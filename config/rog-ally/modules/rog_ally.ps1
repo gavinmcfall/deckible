@@ -42,7 +42,8 @@ if ($armouryInstalled) {
 
 # MyASUS (Microsoft Store only - not in winget)
 if (Get-ConfigValue "install_myasus" $true) {
-    $myasusInstalled = Get-AppxPackage | Where-Object { $_.Name -like "*MyASUS*" }
+    # MyASUS package name includes publisher ID (e.g., B9ECED6F.MyASUS_xxx)
+    $myasusInstalled = Get-AppxPackage | Where-Object { $_.Name -match "MyASUS" -or $_.PackageFamilyName -match "MyASUS" }
     if ($myasusInstalled) {
         Write-Status "MyASUS already installed - skipping" "Success"
     } elseif ($Script:DryRun) {

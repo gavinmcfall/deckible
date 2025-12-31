@@ -27,56 +27,62 @@ $enableSshServer = Get-ConfigValue "ssh_server_enable" $false
 if ($enableSshServer) {
     Write-Status "Configuring OpenSSH Server..." "Info"
 
-    if ($Script:DryRun) {
+    # Check if sshd service exists FIRST (before dry run check)
+    $sshd = Get-Service -Name sshd -ErrorAction SilentlyContinue
+
+    if ($sshd -and $sshd.Status -eq 'Running') {
+        Write-Status "OpenSSH Server already installed and running" "Success"
+    } elseif ($sshd) {
+        # Service exists but not running - just start it
+        if ($Script:DryRun) {
+            Write-Status "[DRY RUN] Would start OpenSSH Server service" "Info"
+        } else {
+            try {
+                Set-Service -Name sshd -StartupType Automatic
+                Start-Service sshd
+                Write-Status "OpenSSH Server started" "Success"
+            } catch {
+                Write-Status "Failed to start SSH Server: $_" "Error"
+            }
+        }
+    } elseif ($Script:DryRun) {
         Write-Status "[DRY RUN] Would install/enable OpenSSH Server" "Info"
     } else {
+        # Need to install OpenSSH Server
         try {
-            # Check if sshd service exists (OpenSSH Server already installed)
-            $sshd = Get-Service -Name sshd -ErrorAction SilentlyContinue
+            Write-Status "Installing OpenSSH Server..." "Info"
 
-            if (-not $sshd) {
-                Write-Status "Installing OpenSSH Server..." "Info"
+            # Check if OpenSSH capability is already present (just not enabled)
+            $capability = Get-WindowsCapability -Online | Where-Object { $_.Name -like 'OpenSSH.Server*' }
 
-                # Check if OpenSSH capability is already present (just not enabled)
-                $capability = Get-WindowsCapability -Online | Where-Object { $_.Name -like 'OpenSSH.Server*' }
-
-                if ($capability.State -eq 'NotPresent') {
-                    # Need to install - use DISM which is faster than Add-WindowsCapability
-                    Write-Host "    Using DISM for faster install..." -ForegroundColor Gray
-                    $dismResult = dism /Online /Add-Capability /CapabilityName:OpenSSH.Server~~~~0.0.1.0 /NoRestart 2>&1
-                    if ($LASTEXITCODE -ne 0) {
-                        # DISM failed, try Add-WindowsCapability as fallback
-                        Write-Host "    DISM failed, trying Add-WindowsCapability..." -ForegroundColor Yellow
-                        Add-WindowsCapability -Online -Name 'OpenSSH.Server~~~~0.0.1.0' -ErrorAction Stop | Out-Null
-                    }
-                    Write-Status "OpenSSH Server installed" "Success"
-                } elseif ($capability.State -eq 'Staged') {
-                    # Already staged, just enable it
-                    Write-Host "    OpenSSH Server staged, enabling..." -ForegroundColor Gray
-                    Add-WindowsCapability -Online -Name 'OpenSSH.Server~~~~0.0.1.0' | Out-Null
-                    Write-Status "OpenSSH Server enabled" "Success"
-                } else {
-                    Write-Status "OpenSSH Server capability present" "Info"
+            if ($capability.State -eq 'NotPresent') {
+                # Need to install - use DISM which is faster than Add-WindowsCapability
+                Write-Host "    Using DISM for faster install..." -ForegroundColor Gray
+                $dismResult = dism /Online /Add-Capability /CapabilityName:OpenSSH.Server~~~~0.0.1.0 /NoRestart 2>&1
+                if ($LASTEXITCODE -ne 0) {
+                    # DISM failed, try Add-WindowsCapability as fallback
+                    Write-Host "    DISM failed, trying Add-WindowsCapability..." -ForegroundColor Yellow
+                    Add-WindowsCapability -Online -Name 'OpenSSH.Server~~~~0.0.1.0' -ErrorAction Stop | Out-Null
                 }
-
-                # Refresh service reference
-                Start-Sleep -Seconds 2
-                $sshd = Get-Service -Name sshd -ErrorAction SilentlyContinue
+                Write-Status "OpenSSH Server installed" "Success"
+            } elseif ($capability.State -eq 'Staged') {
+                # Already staged, just enable it
+                Write-Host "    OpenSSH Server staged, enabling..." -ForegroundColor Gray
+                Add-WindowsCapability -Online -Name 'OpenSSH.Server~~~~0.0.1.0' | Out-Null
+                Write-Status "OpenSSH Server enabled" "Success"
             } else {
-                Write-Status "OpenSSH Server already installed" "Success"
+                Write-Status "OpenSSH Server capability present" "Info"
             }
 
-            # Configure and start the SSH server service
-            if ($sshd) {
-                # Set to automatic start
-                Set-Service -Name sshd -StartupType Automatic
+            # Refresh service reference and configure
+            Start-Sleep -Seconds 2
+            $sshd = Get-Service -Name sshd -ErrorAction SilentlyContinue
 
-                # Start if not running
+            if ($sshd) {
+                Set-Service -Name sshd -StartupType Automatic
                 if ($sshd.Status -ne 'Running') {
                     Start-Service sshd
                     Write-Status "SSH Server started" "Success"
-                } else {
-                    Write-Status "SSH Server already running" "Info"
                 }
 
                 # Also configure ssh-agent for key management
