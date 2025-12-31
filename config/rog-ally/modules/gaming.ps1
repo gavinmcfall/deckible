@@ -31,7 +31,7 @@ foreach ($platform in $platforms) {
     }
 }
 
-# Battle.net - try winget first, fallback to direct download
+# Battle.net - installer doesn't exit cleanly, needs special handling
 if (Get-ConfigValue "install_battle_net" $false) {
     # Check if already installed
     $battleNetInstalled = Test-Path "$env:ProgramFiles(x86)\Battle.net\Battle.net.exe"
@@ -41,30 +41,57 @@ if (Get-ConfigValue "install_battle_net" $false) {
 
     if ($battleNetInstalled) {
         Write-Status "Battle.net already installed" "Success"
+    } elseif ($Script:DryRun) {
+        Write-Status "[DRY RUN] Would install Battle.net" "Info"
     } else {
+        Write-Status "Installing Battle.net..." "Info"
         $battleNetLocation = Get-ConfigValue "battle_net_location" "$env:ProgramFiles(x86)\Battle.net"
 
-        if ($Script:DryRun) {
-            Write-Status "[DRY RUN] Would install Battle.net" "Info"
-        } else {
-            Write-Status "Installing Battle.net..." "Info"
-            $wingetSuccess = $false
+        try {
+            # Download installer
+            $battleNetUrl = "https://www.battle.net/download/getInstallerForGame?os=win&gameProgram=BATTLENET_APP&version=live"
+            $installer = Join-Path $env:TEMP "Battle.net-Setup.exe"
 
-            # Try winget first with location parameter
-            try {
-                $result = winget install --id "Blizzard.BattleNet" --location "$battleNetLocation" --accept-source-agreements --accept-package-agreements --silent 2>&1
-                if ($LASTEXITCODE -eq 0) {
-                    Write-Status "Battle.net installed (winget)" "Success"
-                    $wingetSuccess = $true
+            Write-Host "    Downloading Battle.net installer..." -ForegroundColor Gray
+            $ProgressPreference = 'SilentlyContinue'
+            Invoke-WebRequest -Uri $battleNetUrl -OutFile $installer -UseBasicParsing
+            $ProgressPreference = 'Continue'
+
+            if (Test-Path $installer) {
+                Write-Host "    Running installer (will not wait for completion)..." -ForegroundColor Gray
+
+                # Start installer WITHOUT waiting - it launches the app and never exits
+                Start-Process -FilePath $installer -ArgumentList "--lang=enUS --installpath=`"$battleNetLocation`""
+
+                # Poll for Battle.net.exe to appear (max 2 minutes)
+                $maxWait = 120
+                $waited = 0
+                $installed = $false
+
+                while ($waited -lt $maxWait) {
+                    Start-Sleep -Seconds 5
+                    $waited += 5
+
+                    if ((Test-Path "$battleNetLocation\Battle.net.exe") -or
+                        (Test-Path "$env:ProgramFiles(x86)\Battle.net\Battle.net.exe") -or
+                        (Test-Path "$env:ProgramFiles\Battle.net\Battle.net.exe")) {
+                        $installed = $true
+                        break
+                    }
+                    Write-Host "    Waiting for install... (${waited}s)" -ForegroundColor Gray
                 }
-            } catch { }
 
-            # Fallback to direct download if winget failed
-            if (-not $wingetSuccess) {
-                Write-Status "Winget failed, trying direct download..." "Warning"
-                $battleNetUrl = "https://www.battle.net/download/getInstallerForGame?os=win&gameProgram=BATTLENET_APP&version=live"
-                Install-DirectDownload -Name "Battle.net" -Url $battleNetUrl -InstallerArgs "--lang=enUS --installpath=`"$battleNetLocation`""
+                # Cleanup installer
+                Remove-Item $installer -Force -ErrorAction SilentlyContinue
+
+                if ($installed) {
+                    Write-Status "Battle.net installed" "Success"
+                } else {
+                    Write-Status "Battle.net install timed out - may need manual completion" "Warning"
+                }
             }
+        } catch {
+            Write-Status "Failed to install Battle.net: $_" "Error"
         }
     }
 }
