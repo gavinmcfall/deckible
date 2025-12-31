@@ -800,25 +800,19 @@ function Run-DeviceSetup {
     $devicePath = Join-Path $BootibleDir "config\$Device"
     $runScript = Join-Path $devicePath "Run.ps1"
 
-    # Build arguments
-    $arguments = @()
+    # Build arguments for splatting
+    $runParams = @{}
     if ($DryRun) {
-        $arguments += "-DryRun"
+        $runParams['DryRun'] = $true
     }
     if ($script:SelectedConfig) {
-        $arguments += "-ConfigFile"
-        $arguments += "`"$($script:SelectedConfig)`""
+        $runParams['ConfigFile'] = $script:SelectedConfig
     }
 
     switch ($Device) {
         "rog-ally" {
-            # Use -ExecutionPolicy Bypass to avoid execution policy errors
-            if ($arguments.Count -gt 0) {
-                $argString = $arguments -join " "
-                powershell -ExecutionPolicy Bypass -Command "& '$runScript' $argString"
-            } else {
-                powershell -ExecutionPolicy Bypass -File $runScript
-            }
+            # Use call operator with splatting to avoid argument quoting issues
+            & $runScript @runParams
         }
         default {
             Write-Status "Unknown device type: $Device" "Error"
