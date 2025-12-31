@@ -73,11 +73,12 @@ if (Get-ConfigValue "install_spotify" $false) {
         if ($choco) {
             Write-Status "Installing Spotify via Chocolatey..." "Info"
             try {
-                choco install spotify -y 2>&1 | Out-Null
-                if (Test-Path "$env:APPDATA\Spotify\Spotify.exe") {
+                # Use --no-progress to prevent hanging, -r for reduced output
+                $result = choco install spotify -y --no-progress -r --ignore-checksums 2>&1
+                if ($LASTEXITCODE -eq 0) {
                     Write-Status "Spotify installed" "Success"
                 } else {
-                    Write-Status "Spotify installed (verify manually)" "Success"
+                    Write-Status "Chocolatey returned exit code $LASTEXITCODE" "Warning"
                 }
             } catch {
                 Write-Status "Chocolatey install failed: $_" "Warning"

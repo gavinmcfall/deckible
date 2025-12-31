@@ -43,8 +43,13 @@ if (Get-ConfigValue "install_anydesk" $false) {
         if ($choco) {
             Write-Status "Installing AnyDesk via Chocolatey..." "Info"
             try {
-                choco install anydesk -y 2>&1 | Out-Null
-                Write-Status "AnyDesk installed" "Success"
+                # Use --no-progress to prevent hanging, -r for reduced output
+                $result = choco install anydesk -y --no-progress -r 2>&1
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Status "AnyDesk installed" "Success"
+                } else {
+                    Write-Status "Chocolatey returned exit code $LASTEXITCODE" "Warning"
+                }
             } catch {
                 Write-Status "Chocolatey install failed: $_" "Warning"
             }
