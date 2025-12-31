@@ -40,12 +40,17 @@ if ($armouryInstalled) {
     }
 }
 
-# MyASUS (Microsoft Store only - not in winget)
+# MyASUS / ASUS PC Assistant (Microsoft Store only - not in winget)
+# ROG Ally uses ASUSPCAssistant or ASUSCommandCenter instead of MyASUS
 if (Get-ConfigValue "install_myasus" $true) {
-    # MyASUS package name includes publisher ID (e.g., B9ECED6F.MyASUS_xxx)
-    $myasusInstalled = Get-AppxPackage | Where-Object { $_.Name -match "MyASUS" -or $_.PackageFamilyName -match "MyASUS" }
-    if ($myasusInstalled) {
-        Write-Status "MyASUS already installed - skipping" "Success"
+    $asusApps = Get-AppxPackage | Where-Object {
+        $_.Name -match "MyASUS" -or
+        $_.Name -match "ASUSPCAssistant" -or
+        $_.Name -match "ASUSCommandCenter"
+    }
+    if ($asusApps) {
+        $appNames = ($asusApps | ForEach-Object { $_.Name -replace '^B9ECED6F\.' }) -join ", "
+        Write-Status "ASUS software installed: $appNames" "Success"
     } elseif ($Script:DryRun) {
         Write-Status "[DRY RUN] Would install MyASUS from Microsoft Store" "Info"
     } else {
