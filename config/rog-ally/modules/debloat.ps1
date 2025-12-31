@@ -407,21 +407,39 @@ if ($lockscreenPath) {
                 Copy-Item -Path $lockscreenPath -Destination $localLockscreen -Force
 
                 # Disable Windows Spotlight (use picture instead)
-                Set-RegistryValue -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Lock Screen" -Name "SlideshowEnabled" -Value 0
-
-                # Set lock screen to picture mode
                 Set-RegistryValue -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" -Name "RotatingLockScreenEnabled" -Value 0
+                Set-RegistryValue -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" -Name "RotatingLockScreenOverlayEnabled" -Value 0
+                Set-RegistryValue -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" -Name "SubscribedContent-338387Enabled" -Value 0
 
-                # Set the lock screen image path
-                Set-RegistryValue -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP" -Name "LockScreenImagePath" -Value $localLockscreen -Type "String"
-                Set-RegistryValue -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP" -Name "LockScreenImageUrl" -Value $localLockscreen -Type "String"
-                Set-RegistryValue -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP" -Name "LockScreenImageStatus" -Value 1
+                # Copy to Windows lock screen location (works on Win 10/11)
+                $windowsScreenPath = "C:\Windows\Web\Screen"
+                if (Test-Path $windowsScreenPath) {
+                    # Backup and replace default lock screen images
+                    $imgFiles = @("img100.jpg", "img101.jpg", "img102.jpg", "img103.jpg", "img104.jpg", "img105.jpg")
+                    foreach ($imgFile in $imgFiles) {
+                        $targetPath = Join-Path $windowsScreenPath $imgFile
+                        try {
+                            # Take ownership and copy (requires admin)
+                            if (Test-Path $targetPath) {
+                                takeown /f $targetPath /a 2>$null | Out-Null
+                                icacls $targetPath /grant Administrators:F 2>$null | Out-Null
+                            }
+                            Copy-Item -Path $lockscreenPath -Destination $targetPath -Force -ErrorAction SilentlyContinue
+                        } catch {
+                            # Silently continue - some files may be locked
+                        }
+                    }
+                }
 
-                # Also set via Policies for stronger enforcement
-                Set-RegistryValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Personalization" -Name "LockScreenImage" -Value $localLockscreen -Type "String"
-                Set-RegistryValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Personalization" -Name "NoChangingLockScreen" -Value 0
+                # Set Creative lock screen preference to Picture (not Spotlight)
+                Set-RegistryValue -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Lock Screen\Creative" -Name "LockImageFlags" -Value 0
+                Set-RegistryValue -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Lock Screen\Creative" -Name "CreativeId" -Value "" -Type "String"
+                Set-RegistryValue -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Lock Screen\Creative" -Name "PortraitAssetPath" -Value $localLockscreen -Type "String"
+                Set-RegistryValue -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Lock Screen\Creative" -Name "LandscapeAssetPath" -Value $localLockscreen -Type "String"
+                Set-RegistryValue -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Lock Screen\Creative" -Name "HotspotImageFolderPath" -Value $localLockscreen -Type "String"
 
                 Write-Status "Lock screen set: $(Split-Path $lockscreenPath -Leaf)" "Success"
+                Write-Status "Note: May require sign-out/restart to take effect" "Info"
             } catch {
                 Write-Status "Failed to set lock screen: $_" "Warning"
             }
