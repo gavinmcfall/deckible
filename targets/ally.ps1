@@ -416,7 +416,7 @@ function Authenticate-GitHub {
 
     # GitHub CLI's OAuth client_id (public, used by gh CLI)
     $clientId = "178c6fc778ccc68e1d6a"
-    $scope = "repo,read:org"
+    $scope = "repo,read:org,admin:public_key"
 
     try {
         # Request device code from GitHub (JSON response)
