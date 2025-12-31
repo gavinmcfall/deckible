@@ -114,7 +114,7 @@ if ($importAuthorizedKeys -and $authorizedKeysList.Count -gt 0) {
             # Build authorized_keys content from private repo
             $keysContent = @()
             $privateRepoPath = $Script:PrivateRoot
-            $keysDir = Join-Path $privateRepoPath "ssh-keys"
+            $keysDir = Join-Path $privateRepoPath "files\ssh-keys"
 
             foreach ($keyFile in $authorizedKeysList) {
                 $keyPath = Join-Path $keysDir $keyFile
