@@ -51,25 +51,9 @@ foreach ($app in $commApps) {
 # MEDIA
 # =============================================================================
 
-# VLC - try winget first, fall back to direct download
+# VLC
 if (Get-ConfigValue "install_vlc" $false) {
-    $vlcInstalled = Test-Path "${env:ProgramFiles}\VideoLAN\VLC\vlc.exe"
-    if (-not $vlcInstalled) {
-        $vlcInstalled = Test-Path "${env:ProgramFiles(x86)}\VideoLAN\VLC\vlc.exe"
-    }
-
-    if ($vlcInstalled) {
-        Write-Status "VLC already installed" "Success"
-    } else {
-        # Try winget first
-        $wingetSuccess = Install-WingetPackage -PackageId "VideoLAN.VLC" -Name "VLC"
-
-        # If winget failed, use direct download
-        if (-not $wingetSuccess) {
-            Write-Status "Winget failed, trying direct download..." "Info"
-            Install-DirectDownload -Name "VLC" -Url "https://download.videolan.org/pub/videolan/vlc/3.0.21/win64/vlc-3.0.21-win64.exe" -InstallerArgs "/S"
-        }
-    }
+    Install-WingetPackage -PackageId "VideoLAN.VLC" -Name "VLC"
 }
 
 # Spotify - use Microsoft Store version (works with admin context)
