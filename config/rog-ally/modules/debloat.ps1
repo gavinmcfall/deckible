@@ -11,6 +11,10 @@ if (-not (Get-ConfigValue "install_debloat" $true)) {
     return
 }
 
+# Collection of UCPD-protected HKCU registry keys that require non-elevated context
+# These will be applied via a scheduled task at next user logon
+$Script:UcpdKeys = @()
+
 # Helper function to set registry value
 function Set-RegistryValue {
     param(
@@ -126,47 +130,15 @@ if (Get-ConfigValue "disable_lockscreen_junk" $true) {
     Set-RegistryValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Feeds" -Name "EnableFeeds" -Value 0
     Set-RegistryValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\System" -Name "DisableLockScreenAppNotifications" -Value 1
 
-    # HKCU settings blocked by UCPD when running elevated - use scheduled task
+    # HKCU settings blocked by UCPD when running elevated - collect for scheduled task
     # These keys require non-elevated context to modify
-    $ucpdKeys = @(
-        @{ Path = "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Feeds"; Name = "ShellFeedsTaskbarViewMode"; Value = 2 },
-        @{ Path = "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced"; Name = "TaskbarMn"; Value = 0 },
-        @{ Path = "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Notifications\Settings\Windows.LockScreen.MediaWidget"; Name = "Enabled"; Value = 0 }
+    $Script:UcpdKeys += @(
+        @{ Path = "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Feeds"; Name = "ShellFeedsTaskbarViewMode"; Value = "2"; Type = "DWord" },
+        @{ Path = "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced"; Name = "TaskbarMn"; Value = "0"; Type = "DWord" },
+        @{ Path = "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Notifications\Settings\Windows.LockScreen.MediaWidget"; Name = "Enabled"; Value = "0"; Type = "DWord" }
     )
 
-    if ($Script:DryRun) {
-        Write-Status "[DRY RUN] Would create scheduled task to apply UCPD-protected registry keys" "Info"
-    } else {
-        # Create a one-time scheduled task to apply HKCU settings at next logon (non-elevated)
-        $taskName = "Bootible-ApplyUserSettings"
-        $existingTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-
-        # Build the PowerShell command to set all UCPD-protected keys
-        $regCommands = $ucpdKeys | ForEach-Object {
-            "if (-not (Test-Path '$($_.Path)')) { New-Item -Path '$($_.Path)' -Force | Out-Null }; Set-ItemProperty -Path '$($_.Path)' -Name '$($_.Name)' -Value $($_.Value) -Force"
-        }
-        $allCommands = $regCommands -join "; "
-        # After applying, unregister the task itself
-        $allCommands += "; Unregister-ScheduledTask -TaskName '$taskName' -Confirm:`$false -ErrorAction SilentlyContinue"
-
-        $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command `"$allCommands`""
-        $trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
-        $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
-        $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited
-
-        if ($existingTask) {
-            Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
-        }
-
-        try {
-            Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Force | Out-Null
-            Write-Status "Created scheduled task to apply widget settings at next logon" "Info"
-        } catch {
-            Write-Status "Could not create scheduled task for UCPD settings: $_" "Warning"
-        }
-    }
-
-    Write-Status "Lock screen junk and widgets disabled" "Success"
+    Write-Status "Lock screen junk and widgets disabled (some settings apply at next logon)" "Success"
 }
 
 # Classic Right-Click Menu (Windows 11)
@@ -377,9 +349,6 @@ if ($wallpaperPath) {
                 $localWallpaper = Join-Path $env:USERPROFILE "Pictures\bootible-wallpaper$([System.IO.Path]::GetExtension($wallpaperPath))"
                 Copy-Item -Path $wallpaperPath -Destination $localWallpaper -Force
 
-                # Set wallpaper via registry
-                Set-RegistryValue -Path "HKCU:\Control Panel\Desktop" -Name "Wallpaper" -Value $localWallpaper -Type "String"
-
                 # Set wallpaper style (2 = Stretch, 10 = Fill, 6 = Fit, 0 = Center, 22 = Span)
                 $wallpaperStyle = Get-ConfigValue "wallpaper_style" "Fill"
                 $styleValue = switch ($wallpaperStyle) {
@@ -391,15 +360,14 @@ if ($wallpaperPath) {
                     "Span" { "22" }
                     default { "10" }
                 }
+                $tileValue = if ($wallpaperStyle -eq "Tile") { "1" } else { "0" }
+
+                # Try immediate registry + API approach (may work in some contexts)
+                Set-RegistryValue -Path "HKCU:\Control Panel\Desktop" -Name "Wallpaper" -Value $localWallpaper -Type "String"
                 Set-RegistryValue -Path "HKCU:\Control Panel\Desktop" -Name "WallpaperStyle" -Value $styleValue -Type "String"
+                Set-RegistryValue -Path "HKCU:\Control Panel\Desktop" -Name "TileWallpaper" -Value $tileValue -Type "String"
 
-                if ($wallpaperStyle -eq "Tile") {
-                    Set-RegistryValue -Path "HKCU:\Control Panel\Desktop" -Name "TileWallpaper" -Value "1" -Type "String"
-                } else {
-                    Set-RegistryValue -Path "HKCU:\Control Panel\Desktop" -Name "TileWallpaper" -Value "0" -Type "String"
-                }
-
-                # Apply immediately using SystemParametersInfo
+                # Apply immediately using SystemParametersInfo API (works even when elevated)
                 Add-Type -TypeDefinition @"
                     using System;
                     using System.Runtime.InteropServices;
@@ -409,6 +377,13 @@ if ($wallpaperPath) {
                     }
 "@
                 [Wallpaper]::SystemParametersInfo(0x0014, 0, $localWallpaper, 0x01 -bor 0x02) | Out-Null
+
+                # Also add to UCPD keys for scheduled task fallback
+                $Script:UcpdKeys += @(
+                    @{ Path = "HKCU:\Control Panel\Desktop"; Name = "Wallpaper"; Value = $localWallpaper; Type = "String" },
+                    @{ Path = "HKCU:\Control Panel\Desktop"; Name = "WallpaperStyle"; Value = $styleValue; Type = "String" },
+                    @{ Path = "HKCU:\Control Panel\Desktop"; Name = "TileWallpaper"; Value = $tileValue; Type = "String" }
+                )
 
                 Write-Status "Wallpaper set: $(Split-Path $wallpaperPath -Leaf)" "Success"
             } catch {
@@ -465,11 +440,24 @@ if ($lockscreenPath) {
                 }
 
                 # Set Creative lock screen preference to Picture (not Spotlight)
+                # Try immediate approach (may work in some contexts)
                 Set-RegistryValue -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Lock Screen\Creative" -Name "LockImageFlags" -Value 0
                 Set-RegistryValue -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Lock Screen\Creative" -Name "CreativeId" -Value "" -Type "String"
                 Set-RegistryValue -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Lock Screen\Creative" -Name "PortraitAssetPath" -Value $localLockscreen -Type "String"
                 Set-RegistryValue -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Lock Screen\Creative" -Name "LandscapeAssetPath" -Value $localLockscreen -Type "String"
                 Set-RegistryValue -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Lock Screen\Creative" -Name "HotspotImageFolderPath" -Value $localLockscreen -Type "String"
+
+                # Also add to UCPD keys for scheduled task fallback
+                $Script:UcpdKeys += @(
+                    @{ Path = "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager"; Name = "RotatingLockScreenEnabled"; Value = "0"; Type = "DWord" },
+                    @{ Path = "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager"; Name = "RotatingLockScreenOverlayEnabled"; Value = "0"; Type = "DWord" },
+                    @{ Path = "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager"; Name = "SubscribedContent-338387Enabled"; Value = "0"; Type = "DWord" },
+                    @{ Path = "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Lock Screen\Creative"; Name = "LockImageFlags"; Value = "0"; Type = "DWord" },
+                    @{ Path = "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Lock Screen\Creative"; Name = "CreativeId"; Value = ""; Type = "String" },
+                    @{ Path = "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Lock Screen\Creative"; Name = "PortraitAssetPath"; Value = $localLockscreen; Type = "String" },
+                    @{ Path = "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Lock Screen\Creative"; Name = "LandscapeAssetPath"; Value = $localLockscreen; Type = "String" },
+                    @{ Path = "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Lock Screen\Creative"; Name = "HotspotImageFolderPath"; Value = $localLockscreen; Type = "String" }
+                )
 
                 # Force Windows to refresh the lock screen settings
                 RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters 1, True 2>$null
@@ -519,6 +507,56 @@ if (Get-ConfigValue "clean_desktop_shortcuts" $true) {
             Write-Status "Removed $removed desktop shortcuts" "Success"
         } else {
             Write-Status "No desktop shortcuts to remove" "Info"
+        }
+    }
+}
+
+# =============================================================================
+# APPLY UCPD-PROTECTED SETTINGS VIA SCHEDULED TASK
+# =============================================================================
+# Some HKCU registry keys are blocked by UCPD (User Control over Protected Data)
+# when running in elevated context. Create a one-time scheduled task to apply
+# these settings at next user logon in non-elevated context.
+
+if ($Script:UcpdKeys.Count -gt 0) {
+    if ($Script:DryRun) {
+        Write-Status "[DRY RUN] Would create scheduled task to apply $($Script:UcpdKeys.Count) UCPD-protected settings at next logon" "Info"
+    } else {
+        $taskName = "Bootible-ApplyUserSettings"
+
+        # Build PowerShell commands for each registry key
+        $regCommands = $Script:UcpdKeys | ForEach-Object {
+            $path = $_.Path
+            $name = $_.Name
+            $value = $_.Value
+            $type = if ($_.Type -eq "String") { "String" } else { "DWord" }
+
+            # Escape single quotes in paths/values
+            $path = $path -replace "'", "''"
+            $value = "$value" -replace "'", "''"
+
+            "try { if (-not (Test-Path '$path')) { New-Item -Path '$path' -Force | Out-Null }; Set-ItemProperty -Path '$path' -Name '$name' -Value '$value' -Type $type -Force -ErrorAction Stop } catch { }"
+        }
+
+        $allCommands = $regCommands -join "; "
+        # Refresh explorer after applying settings
+        $allCommands += "; Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue"
+        # Unregister the task itself after completion
+        $allCommands += "; Start-Sleep -Seconds 2; Unregister-ScheduledTask -TaskName '$taskName' -Confirm:`$false -ErrorAction SilentlyContinue"
+
+        try {
+            # Remove existing task if present
+            Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
+
+            $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command `"$allCommands`""
+            $trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
+            $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 5)
+            $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited
+
+            Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Force | Out-Null
+            Write-Status "Created scheduled task to apply $($Script:UcpdKeys.Count) user settings at next logon" "Info"
+        } catch {
+            Write-Status "Could not create scheduled task for user settings: $_" "Warning"
         }
     }
 }
