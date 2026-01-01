@@ -1,28 +1,21 @@
-#Requires -version 5
-#Requires -RunAsAdministrator
-
 # SSH Setup Module - Windows OpenSSH Server Configuration
 # ========================================================
 # Based on proven setup from known-working configuration.
 # Configures SSH server with proper permissions for admin users.
-#
-# Usage: Called from bootible with $Script:PrivateRoot and config available
 
-param(
-    [string[]]$AuthorizedKeyFiles = @(),  # Key filenames to import from private repo
-    [string]$PrivateRepoPath = "",         # Path to private repo (auto-detected if empty)
-    [switch]$DryRun = $false
-)
+if (-not (Get-ConfigValue "install_ssh" $false)) {
+    Write-Status "SSH module disabled in config" "Info"
+    return
+}
 
-# Use script-scoped variables if available (when called from bootible)
-if (-not $PrivateRepoPath -and $Script:PrivateRoot) {
-    $PrivateRepoPath = $Script:PrivateRoot
-}
-if (-not $AuthorizedKeyFiles -or $AuthorizedKeyFiles.Count -eq 0) {
-    $AuthorizedKeyFiles = Get-ConfigValue "ssh_authorized_keys" @()
-}
-if ($Script:DryRun) {
-    $DryRun = $true
+# Get config values
+$AuthorizedKeyFiles = Get-ConfigValue "ssh_authorized_keys" @()
+$PrivateRepoPath = $Script:PrivateRoot
+$enableSshServer = Get-ConfigValue "ssh_server_enable" $false
+
+if (-not $enableSshServer) {
+    Write-Status "SSH server disabled in config" "Info"
+    return
 }
 
 Write-Host "=== SSH Setup ===" -ForegroundColor Cyan
@@ -30,7 +23,7 @@ Write-Host "=== SSH Setup ===" -ForegroundColor Cyan
 # Enable TLS 1.2 from default (SSL3, TLS)
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Ssl3 -bor [Net.SecurityProtocolType]::Tls -bor [Net.SecurityProtocolType]::Tls11 -bor [Net.SecurityProtocolType]::Tls12
 
-if ($DryRun) {
+if ($Script:DryRun) {
     Write-Host "[DRY RUN] Would configure SSH server" -ForegroundColor Yellow
     Write-Host "[DRY RUN] Would import keys: $($AuthorizedKeyFiles -join ', ')" -ForegroundColor Yellow
     return
