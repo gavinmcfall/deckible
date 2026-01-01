@@ -86,7 +86,7 @@ if (Get-ConfigValue "install_vlc" $false) {
     }
 }
 
-# Spotify - use Microsoft Store version (works with admin context)
+# Spotify - try Microsoft Store first, then winget fallback
 if (Get-ConfigValue "install_spotify" $false) {
     # Check if already installed
     $spotifyInstalled = Get-AppxPackage -Name "SpotifyAB.SpotifyMusic" -ErrorAction SilentlyContinue
@@ -100,12 +100,24 @@ if (Get-ConfigValue "install_spotify" $false) {
         Write-Status "[DRY RUN] Would install Spotify from Microsoft Store" "Info"
     } else {
         Write-Status "Installing Spotify from Microsoft Store..." "Info"
-        # Use Store ID for Spotify (works in admin context unlike winget Spotify.Spotify)
-        $result = winget install 9NCBCSZSJRSB --source msstore --accept-source-agreements --accept-package-agreements --silent 2>&1
-        if ($LASTEXITCODE -eq 0) {
+        $prevEAP = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        try {
+            winget install 9NCBCSZSJRSB --source msstore --accept-source-agreements --accept-package-agreements --silent 2>&1 | Out-Null
+            $exitCode = $LASTEXITCODE
+        } finally {
+            $ErrorActionPreference = $prevEAP
+        }
+
+        if ($exitCode -eq 0) {
             Write-Status "Spotify installed" "Success"
         } else {
-            Write-Status "Spotify install failed - try Microsoft Store manually" "Warning"
+            # Fallback to winget source
+            Write-Status "Store failed, trying winget..." "Info"
+            $wingetSuccess = Install-WingetPackage -PackageId "Spotify.Spotify" -Name "Spotify"
+            if (-not $wingetSuccess) {
+                Write-Status "Spotify install failed - try Microsoft Store manually" "Warning"
+            }
         }
     }
 }
