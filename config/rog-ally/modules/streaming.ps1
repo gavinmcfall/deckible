@@ -61,7 +61,21 @@ if (Get-ConfigValue "install_greenlight" $false) {
 # ------------
 
 if (Get-ConfigValue "install_xbox_app" $true) {
-    Install-WingetPackage -PackageId "Microsoft.GamingApp" -Name "Xbox App"
+    # Xbox App is a Microsoft Store app - not available via winget ID
+    $xboxInstalled = Get-AppxPackage -Name "Microsoft.GamingApp" -ErrorAction SilentlyContinue
+    if ($xboxInstalled) {
+        Write-Status "Xbox App already installed - skipping" "Success"
+    } elseif ($Script:DryRun) {
+        Write-Status "[DRY RUN] Would install: Xbox App from Microsoft Store" "Info"
+    } else {
+        Write-Status "Installing Xbox App from Microsoft Store..." "Info"
+        $result = winget install 9MV0B5HZVK9Z --source msstore --accept-source-agreements --accept-package-agreements --silent 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            Write-Status "Xbox App installed" "Success"
+        } else {
+            Write-Status "Xbox App may already be installed or requires Store login" "Warning"
+        }
+    }
     Write-Status "Xbox App: Includes Xbox Cloud Gaming (requires Game Pass Ultimate)" "Info"
 }
 

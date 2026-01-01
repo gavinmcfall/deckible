@@ -71,7 +71,7 @@ if (Get-ConfigValue "install_myasus" $true) {
 # Open-source alternative for controller configuration
 
 if (Get-ConfigValue "install_handheld_companion" $false) {
-    $installed = Install-WingetPackage -PackageId "Nefarius.HandheldCompanion" -Name "Handheld Companion"
+    $installed = Install-WingetPackage -PackageId "BenjaminLSR.HandheldCompanion" -Name "Handheld Companion"
     if ($installed) {
         Write-Status "Note: Disable Armoury Crate controller features if using Handheld Companion" "Warning"
     } else {
