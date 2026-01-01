@@ -496,7 +496,21 @@ function Authenticate-GitHub {
             # Save token to gh CLI
             Write-Host ""
             Write-Host "    Saving credentials..." -ForegroundColor Gray
-            $accessToken | & gh auth login --with-token 2>&1 | Out-Null
+
+            # Write token to temp file for reliable stdin piping
+            $tokenFile = "$env:TEMP\gh-token-$([guid]::NewGuid().ToString('N').Substring(0,8)).tmp"
+            try {
+                $accessToken | Out-File -FilePath $tokenFile -Encoding ASCII -NoNewline
+                $loginResult = cmd /c "type `"$tokenFile`" | gh auth login --with-token 2>&1"
+                $loginExitCode = $LASTEXITCODE
+            } finally {
+                # Always clean up token file
+                Remove-Item $tokenFile -Force -ErrorAction SilentlyContinue
+            }
+
+            if ($loginExitCode -ne 0) {
+                Write-Host "    gh auth login failed: $loginResult" -ForegroundColor Yellow
+            }
 
             # Verify it worked
             $ErrorActionPreference = "SilentlyContinue"
@@ -508,6 +522,8 @@ function Authenticate-GitHub {
                 & gh auth setup-git 2>&1 | Out-Null
                 Write-Status "GitHub authentication complete" "Success"
                 return $true
+            } else {
+                Write-Host "    gh auth status check failed after login" -ForegroundColor Yellow
             }
         }
 
