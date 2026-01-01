@@ -596,8 +596,18 @@ function Setup-Private {
     # Check if already set via environment variable
     if (-not $PrivateRepo) {
         Write-Host ""
-        $response = Read-Host "Do you have a private config repo? (y/N)"
-        if ($response -match "^[Yy]") {
+        $response = $null
+        while ($response -eq $null) {
+            $input = Read-Host "Do you have a private config repo? (y/N)"
+            if ($input -match "^[Yy]$") {
+                $response = "y"
+            } elseif ($input -match "^[Nn]$" -or $input -eq "") {
+                $response = "n"
+            } else {
+                Write-Host "Invalid input. Please enter 'y' or 'n'" -ForegroundColor Red
+            }
+        }
+        if ($response -eq "y") {
             Write-Host "Your GitHub username: " -NoNewline
             $Script:GitHubUser = Read-Host
             Write-Host "Private repo (e.g., " -NoNewline
