@@ -56,36 +56,26 @@ if (Get-ConfigValue "install_vlc" $false) {
     Install-WingetPackage -PackageId "VideoLAN.VLC" -Name "VLC"
 }
 
-# Spotify - use Chocolatey (handles non-admin install properly)
+# Spotify - use Microsoft Store version (works with admin context)
 if (Get-ConfigValue "install_spotify" $false) {
     # Check if already installed
-    $spotifyInstalled = Test-Path "$env:APPDATA\Spotify\Spotify.exe"
+    $spotifyInstalled = Get-AppxPackage -Name "SpotifyAB.SpotifyMusic" -ErrorAction SilentlyContinue
     if (-not $spotifyInstalled) {
-        $spotifyInstalled = Test-Path "$env:LocalAppData\Microsoft\WindowsApps\Spotify.exe"
+        $spotifyInstalled = Test-Path "$env:APPDATA\Spotify\Spotify.exe"
     }
 
     if ($spotifyInstalled) {
         Write-Status "Spotify already installed" "Success"
     } elseif ($Script:DryRun) {
-        Write-Status "[DRY RUN] Would install Spotify via Chocolatey" "Info"
+        Write-Status "[DRY RUN] Would install Spotify from Microsoft Store" "Info"
     } else {
-        $choco = Get-Command choco -ErrorAction SilentlyContinue
-        if ($choco) {
-            Write-Status "Installing Spotify via Chocolatey..." "Info"
-            try {
-                # Use --no-progress to prevent hanging, -r for reduced output
-                $result = choco install spotify -y --no-progress -r --ignore-checksums 2>&1
-                if ($LASTEXITCODE -eq 0) {
-                    Write-Status "Spotify installed" "Success"
-                } else {
-                    Write-Status "Chocolatey returned exit code $LASTEXITCODE" "Warning"
-                }
-            } catch {
-                Write-Status "Chocolatey install failed: $_" "Warning"
-            }
+        Write-Status "Installing Spotify from Microsoft Store..." "Info"
+        # Use Store ID for Spotify (works in admin context unlike winget Spotify.Spotify)
+        $result = winget install 9NCBCSZSJRSB --source msstore --accept-source-agreements --accept-package-agreements --silent 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            Write-Status "Spotify installed" "Success"
         } else {
-            Write-Status "Chocolatey not available - install Spotify manually" "Warning"
-            Write-Status "https://spotify.com/download" "Info"
+            Write-Status "Spotify install failed - try Microsoft Store manually" "Warning"
         }
     }
 }

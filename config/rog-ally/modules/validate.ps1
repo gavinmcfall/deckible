@@ -69,6 +69,7 @@ $wingetPackages = @(
     @{ Id = "Tailscale.Tailscale"; Name = "Tailscale" },
     @{ Id = "Proton.ProtonVPN"; Name = "ProtonVPN" },
     @{ Id = "RustDesk.RustDesk"; Name = "RustDesk" },
+    @{ Id = "AnyDesk.AnyDesk"; Name = "AnyDesk" },
 
     # ROG Ally Tools
     @{ Id = "BenjaminLSR.HandheldCompanion"; Name = "Handheld Companion" },
