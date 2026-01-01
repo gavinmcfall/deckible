@@ -265,10 +265,10 @@ if (Get-ConfigValue "set_services_manual" $true) {
         "DiagTrack",           # Connected User Experiences and Telemetry
         "dmwappushservice",    # WAP Push Message Routing Service
         "MapsBroker",          # Downloaded Maps Manager
-        "lfsvc",               # Geolocation Service
         "SharedAccess",        # Internet Connection Sharing
         "RemoteRegistry",      # Remote Registry
         "WMPNetworkSvc"        # Windows Media Player Network Sharing
+        # Note: lfsvc (Geolocation) removed - needed for location services
     )
 
     if (-not $Script:DryRun) {
