@@ -51,9 +51,31 @@ foreach ($app in $commApps) {
 # MEDIA
 # =============================================================================
 
-# VLC
+# VLC - try Microsoft Store first (more reliable in admin context), then winget
 if (Get-ConfigValue "install_vlc" $false) {
-    Install-WingetPackage -PackageId "VideoLAN.VLC" -Name "VLC"
+    $vlcInstalled = Test-Path "${env:ProgramFiles}\VideoLAN\VLC\vlc.exe"
+    if (-not $vlcInstalled) {
+        $vlcInstalled = Get-AppxPackage -Name "*VLC*" -ErrorAction SilentlyContinue
+    }
+
+    if ($vlcInstalled) {
+        Write-Status "VLC already installed" "Success"
+    } elseif ($Script:DryRun) {
+        Write-Status "[DRY RUN] Would install VLC from Microsoft Store" "Info"
+    } else {
+        Write-Status "Installing VLC from Microsoft Store..." "Info"
+        $result = winget install XPDM1ZW6815MQM --source msstore --accept-source-agreements --accept-package-agreements --silent 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            Write-Status "VLC installed" "Success"
+        } else {
+            # Fallback to winget
+            Write-Status "Store failed, trying winget..." "Info"
+            $wingetSuccess = Install-WingetPackage -PackageId "VideoLAN.VLC" -Name "VLC"
+            if (-not $wingetSuccess) {
+                Write-Status "VLC install failed - download from https://videolan.org" "Warning"
+            }
+        }
+    }
 }
 
 # Spotify - use Microsoft Store version (works with admin context)
