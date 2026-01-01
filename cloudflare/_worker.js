@@ -650,7 +650,8 @@ export default {
     const route = ROUTES[path];
     if (route) {
       const cache = caches.default;
-      const cacheKey = new Request(`https://bootible.dev/cache${route.path}`, request);
+      // Include query string in cache key so ?v=X can bust cache
+      const cacheKey = new Request(`https://bootible.dev/cache${route.path}${url.search}`, request);
 
       // Try to get from cache first
       let cachedResponse = await cache.match(cacheKey);
