@@ -1016,6 +1016,16 @@ function Main {
                         # Check if there's anything to commit
                         $stagedFiles = & git diff --cached --name-only 2>$null
                         if ($stagedFiles) {
+                            # Set git identity if not configured (required for commit)
+                            $userName = & git config user.name 2>$null
+                            $userEmail = & git config user.email 2>$null
+                            if (-not $userName) {
+                                & git config user.name "bootible" 2>$null
+                            }
+                            if (-not $userEmail) {
+                                & git config user.email "bootible@localhost" 2>$null
+                            }
+
                             # Commit with output captured to verify success
                             $commitOutput = & git commit -m "log: $Device $runType $(Get-Date -Format 'yyyy-MM-dd HH:mm')" 2>&1
 
