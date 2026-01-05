@@ -65,6 +65,174 @@
           {% else %}Using default config.yml{% endif %}
       tags: always
 
+    # Validate configuration schema
+    # Reports ALL errors before failing. Catches misconfigurations early.
+    - name: Validate configuration schema
+      vars:
+        # Schema definition: variable => expected type
+        # Types: 'string', 'int', 'bool', 'list', 'dict'
+        schema:
+          # System
+          hostname: 'string'
+          create_snapshot: 'bool'
+          github_token: 'string'
+
+          # SSH
+          install_ssh: 'bool'
+          ssh_port: 'int'
+
+          # Package managers
+          package_managers_flatpak: 'bool'
+          package_managers_pacman: 'bool'
+          package_managers_nix: 'bool'
+
+          # Remote access
+          install_tailscale: 'bool'
+          install_remote_desktop: 'bool'
+          install_sunshine: 'bool'
+          install_vnc: 'bool'
+
+          # Gaming
+          install_decky: 'bool'
+          install_proton_tools: 'bool'
+          install_protonup_qt: 'bool'
+          install_proton_ge: 'bool'
+          install_protontricks: 'bool'
+          install_waydroid: 'bool'
+          install_emudeck: 'bool'
+          install_stickdeck: 'bool'
+          install_cryoutilities: 'bool'
+
+          # Apps
+          install_flatpak_apps: 'bool'
+          install_discord: 'bool'
+          install_signal: 'bool'
+          install_spotify: 'bool'
+          install_vlc: 'bool'
+          install_firefox: 'bool'
+          install_chromium: 'bool'
+          install_obs: 'bool'
+          install_vscode: 'bool'
+          install_flatseal: 'bool'
+          install_anydesk: 'bool'
+          install_chiaki: 'bool'
+          install_moonlight: 'bool'
+          install_greenlight: 'bool'
+          install_plex: 'bool'
+          install_jellyfin: 'bool'
+          install_telegram: 'bool'
+          install_slack: 'bool'
+          install_element: 'bool'
+          install_zoom: 'bool'
+          install_libreoffice: 'bool'
+          install_gimp: 'bool'
+          install_thunderbird: 'bool'
+          install_syncthing: 'bool'
+          install_qbittorrent: 'bool'
+          install_filezilla: 'bool'
+          install_heroic: 'bool'
+          install_lutris: 'bool'
+          install_bottles: 'bool'
+          install_neovim: 'bool'
+
+          # Storage
+          move_shader_cache: 'bool'
+
+          # Paths
+          deck_home: 'string'
+
+        # Collect all validation errors
+        validation_errors: >-
+          {%- set errors = [] -%}
+          {# Check hostname (string) #}
+          {%- if hostname is defined and hostname is not string -%}
+            {%- set _ = errors.append('hostname: expected string, got ' ~ hostname | type_debug) -%}
+          {%- endif -%}
+          {# Check create_snapshot (bool) #}
+          {%- if create_snapshot is defined and create_snapshot is not sameas true and create_snapshot is not sameas false -%}
+            {%- set _ = errors.append('create_snapshot: expected bool, got ' ~ create_snapshot | type_debug ~ ' (' ~ create_snapshot ~ ')') -%}
+          {%- endif -%}
+          {# Check ssh_port (int) #}
+          {%- if ssh_port is defined and ssh_port is not number -%}
+            {%- set _ = errors.append('ssh_port: expected int, got ' ~ ssh_port | type_debug ~ ' (' ~ ssh_port ~ ')') -%}
+          {%- endif -%}
+          {# Check package_managers (nested bools) #}
+          {%- if package_managers is defined -%}
+            {%- if package_managers.flatpak is defined and package_managers.flatpak is not sameas true and package_managers.flatpak is not sameas false -%}
+              {%- set _ = errors.append('package_managers.flatpak: expected bool, got ' ~ package_managers.flatpak | type_debug) -%}
+            {%- endif -%}
+            {%- if package_managers.pacman is defined and package_managers.pacman is not sameas true and package_managers.pacman is not sameas false -%}
+              {%- set _ = errors.append('package_managers.pacman: expected bool, got ' ~ package_managers.pacman | type_debug) -%}
+            {%- endif -%}
+            {%- if package_managers.nix is defined and package_managers.nix is not sameas true and package_managers.nix is not sameas false -%}
+              {%- set _ = errors.append('package_managers.nix: expected bool, got ' ~ package_managers.nix | type_debug) -%}
+            {%- endif -%}
+          {%- endif -%}
+          {# Check all install_* bools #}
+          {%- for var in ['install_ssh', 'install_tailscale', 'install_remote_desktop', 'install_sunshine', 'install_vnc',
+                          'install_decky', 'install_proton_tools', 'install_protonup_qt', 'install_proton_ge', 'install_protontricks',
+                          'install_waydroid', 'install_emudeck', 'install_stickdeck', 'install_cryoutilities',
+                          'install_flatpak_apps', 'install_discord', 'install_signal', 'install_spotify', 'install_vlc',
+                          'install_firefox', 'install_chromium', 'install_obs', 'install_vscode', 'install_flatseal',
+                          'install_anydesk', 'install_chiaki', 'install_moonlight', 'install_greenlight',
+                          'install_plex', 'install_jellyfin', 'install_telegram', 'install_slack', 'install_element',
+                          'install_zoom', 'install_libreoffice', 'install_gimp', 'install_thunderbird',
+                          'install_syncthing', 'install_qbittorrent', 'install_filezilla', 'install_heroic',
+                          'install_lutris', 'install_bottles', 'install_neovim', 'move_shader_cache'] -%}
+            {%- set val = lookup('vars', var, default=None) -%}
+            {%- if val is not none and val is not sameas true and val is not sameas false -%}
+              {%- set _ = errors.append(var ~ ': expected bool, got ' ~ val | type_debug ~ ' (' ~ val ~ ')') -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {# Check string types #}
+          {%- for var in ['github_token', 'deck_home'] -%}
+            {%- set val = lookup('vars', var, default=None) -%}
+            {%- if val is not none and val is not string -%}
+              {%- set _ = errors.append(var ~ ': expected string, got ' ~ val | type_debug) -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {# Check password_manager enum #}
+          {%- if password_manager is defined -%}
+            {%- set allowed_pm = ['1password', 'bitwarden', 'keepassxc', 'protonpass', 'none'] -%}
+            {%- if password_manager not in allowed_pm -%}
+              {%- set _ = errors.append('password_manager: expected one of [' ~ allowed_pm | join(', ') ~ '], got ' ~ password_manager) -%}
+            {%- endif -%}
+          {%- endif -%}
+          {# Check password_manager_install_method enum #}
+          {%- if password_manager_install_method is defined -%}
+            {%- set allowed_pmim = ['flatpak', 'distrobox'] -%}
+            {%- if password_manager_install_method not in allowed_pmim -%}
+              {%- set _ = errors.append('password_manager_install_method: expected one of [' ~ allowed_pmim | join(', ') ~ '], got ' ~ password_manager_install_method) -%}
+            {%- endif -%}
+          {%- endif -%}
+          {# Check emulation_storage enum #}
+          {%- if emulation_storage is defined -%}
+            {%- set allowed_es = ['auto', 'internal', 'sdcard'] -%}
+            {%- if emulation_storage not in allowed_es -%}
+              {%- set _ = errors.append('emulation_storage: expected one of [' ~ allowed_es | join(', ') ~ '], got ' ~ emulation_storage) -%}
+            {%- endif -%}
+          {%- endif -%}
+          {{ errors | to_json }}
+      ansible.builtin.assert:
+        that:
+          - (validation_errors | from_json | length) == 0
+        fail_msg: |
+
+          ═══════════════════════════════════════════════════════════════
+                          CONFIGURATION ERRORS FOUND
+          ═══════════════════════════════════════════════════════════════
+
+          The following configuration values have incorrect types:
+
+          {% for err in (validation_errors | from_json) %}
+            - {{ err }}
+          {% endfor %}
+
+          Fix the above errors in your config.yml before continuing.
+
+        success_msg: "Configuration schema valid"
+      tags: always
+
     # Set private files path for roles to use
     - name: Set private files path
       ansible.builtin.set_fact:

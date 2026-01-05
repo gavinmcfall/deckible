@@ -241,6 +241,271 @@ function Get-ConfigValue {
     return $value
 }
 
+function Validate-ConfigSchema {
+    <#
+    .SYNOPSIS
+        Validates config.yml against expected types.
+        Reports ALL errors before failing. Catches misconfigurations early.
+    #>
+    param([hashtable]$Config)
+
+    $errors = @()
+
+    # Schema definition: path => expected type
+    # Types: 'string', 'int', 'bool', 'list', 'hashtable', 'enum:val1,val2,...'
+    $schema = @{
+        # System
+        'hostname' = 'string'
+        'create_restore_point' = 'bool'
+
+        # Static IP
+        'static_ip.enabled' = 'bool'
+        'static_ip.adapter' = 'string'
+        'static_ip.address' = 'string'
+        'static_ip.prefix_length' = 'int'
+        'static_ip.gateway' = 'string'
+        'static_ip.dns' = 'list'
+
+        # Package managers
+        'package_managers.winget' = 'bool'
+        'package_managers.chocolatey' = 'bool'
+        'package_managers.scoop' = 'bool'
+
+        # Top-level install flags
+        'install_apps' = 'bool'
+        'install_gaming' = 'bool'
+        'install_streaming' = 'bool'
+        'install_remote_access' = 'bool'
+        'install_ssh' = 'bool'
+        'install_emulation' = 'bool'
+        'install_rog_ally' = 'bool'
+        'install_optimization' = 'bool'
+        'install_debloat' = 'bool'
+        'install_dev_tools' = 'bool'
+        'install_system_utilities' = 'bool'
+        'install_runtimes' = 'bool'
+
+        # App install flags
+        'install_discord' = 'bool'
+        'install_signal' = 'bool'
+        'install_spotify' = 'bool'
+        'install_vlc' = 'bool'
+        'install_firefox' = 'bool'
+        'install_chrome' = 'bool'
+        'install_edge' = 'bool'
+        'install_obs' = 'bool'
+        'install_vscode' = 'bool'
+        'install_powertoys' = 'bool'
+        'install_7zip' = 'bool'
+        'install_everything' = 'bool'
+        'install_windows_terminal' = 'bool'
+        'install_powershell7' = 'bool'
+
+        # Password manager
+        'password_manager' = 'enum:1password,bitwarden,keepassxc,none'
+
+        # Gaming
+        'install_steam' = 'bool'
+        'install_gog_galaxy' = 'bool'
+        'install_epic_launcher' = 'bool'
+        'install_ea_app' = 'bool'
+        'install_ubisoft_connect' = 'bool'
+        'install_battle_net' = 'bool'
+        'install_amazon_games' = 'bool'
+        'install_playnite' = 'bool'
+        'install_launchbox' = 'bool'
+        'install_ds4windows' = 'bool'
+        'install_hidmanager' = 'bool'
+        'install_nexus_mods' = 'bool'
+        'install_reshade' = 'bool'
+
+        # Streaming
+        'install_moonlight' = 'bool'
+        'install_parsec' = 'bool'
+        'install_steam_link' = 'bool'
+        'install_chiaki' = 'bool'
+        'install_greenlight' = 'bool'
+        'install_xbox_app' = 'bool'
+        'install_geforcenow' = 'bool'
+
+        # Remote access
+        'install_tailscale' = 'bool'
+        'install_protonvpn' = 'bool'
+        'install_anydesk' = 'bool'
+        'install_rustdesk' = 'bool'
+        'install_parsec_remote' = 'bool'
+
+        # SSH
+        'ssh_server_enable' = 'bool'
+        'ssh_import_authorized_keys' = 'bool'
+        'ssh_authorized_keys' = 'list'
+        'ssh_key_name' = 'string'
+        'ssh_generate_key' = 'bool'
+        'ssh_add_to_github' = 'bool'
+        'ssh_save_to_private' = 'bool'
+        'ssh_configure_git' = 'bool'
+
+        # Emulation
+        'install_emudeck' = 'bool'
+        'install_retroarch' = 'bool'
+        'install_emulationstation' = 'bool'
+        'install_dolphin' = 'bool'
+        'install_pcsx2' = 'bool'
+        'install_rpcs3' = 'bool'
+        'install_yuzu' = 'bool'
+        'install_ryujinx' = 'bool'
+        'install_cemu' = 'bool'
+        'install_duckstation' = 'bool'
+        'install_ppsspp' = 'bool'
+
+        # ROG Ally specific
+        'install_armoury_crate' = 'bool'
+        'install_myasus' = 'bool'
+        'install_handheld_companion' = 'bool'
+        'install_rtss' = 'bool'
+        'install_hwinfo' = 'bool'
+        'install_msi_afterburner' = 'bool'
+        'install_cpuz' = 'bool'
+        'install_gpuz' = 'bool'
+        'configure_power_plans' = 'bool'
+
+        # Optimization
+        'disable_xbox_game_bar' = 'bool'
+        'disable_game_dvr' = 'bool'
+        'disable_tips' = 'bool'
+        'disable_cortana' = 'bool'
+        'enable_game_mode' = 'bool'
+        'enable_hardware_gpu_scheduling' = 'bool'
+        'disable_fullscreen_optimizations' = 'bool'
+        'disable_core_isolation' = 'bool'
+        'disable_vm_platform' = 'bool'
+        'disable_bitlocker' = 'bool'
+        'disable_amd_varibright' = 'bool'
+        'steam_disable_guide_focus' = 'bool'
+        'steam_start_big_picture' = 'bool'
+        'configure_hdr' = 'bool'
+        'set_refresh_rate' = 'int'
+        'enable_storage_sense' = 'bool'
+        'compact_os' = 'bool'
+        'run_disk_cleanup' = 'bool'
+        'force_time_sync' = 'bool'
+        'generate_battery_report' = 'bool'
+
+        # Paths
+        'user_home' = 'string'
+        'games_path' = 'string'
+        'roms_path' = 'string'
+        'bios_path' = 'string'
+
+        # Debloat
+        'disable_telemetry' = 'bool'
+        'disable_activity_history' = 'bool'
+        'disable_location_tracking' = 'bool'
+        'disable_copilot' = 'bool'
+        'disable_lockscreen_junk' = 'bool'
+        'classic_right_click_menu' = 'bool'
+        'disable_bing_search' = 'bool'
+        'show_file_extensions' = 'bool'
+        'show_hidden_files' = 'bool'
+        'clean_desktop_shortcuts' = 'bool'
+        'wallpaper_path' = 'string'
+        'wallpaper_style' = 'enum:Fill,Fit,Stretch,Center,Tile,Span'
+        'lockscreen_path' = 'string'
+        'debloat_edge' = 'bool'
+        'disable_edge' = 'bool'
+        'prefer_ipv4' = 'bool'
+        'disable_teredo' = 'bool'
+        'set_services_manual' = 'bool'
+        'powershell7_default_terminal' = 'bool'
+        'disable_powershell7_telemetry' = 'bool'
+
+        # Development
+        'install_git' = 'bool'
+        'install_python' = 'bool'
+        'install_nodejs' = 'bool'
+        'install_java' = 'bool'
+
+        # System utilities
+        'install_revo_uninstaller' = 'bool'
+        'install_ccleaner' = 'bool'
+        'install_wiztree' = 'bool'
+        'install_drivereasy' = 'bool'
+
+        # Runtimes
+        'install_dotnet_runtime' = 'bool'
+        'install_dotnet_desktop' = 'bool'
+        'install_vcredist' = 'bool'
+        'install_directx' = 'bool'
+    }
+
+    # Helper to get nested value
+    function Get-NestedValue {
+        param([hashtable]$Obj, [string]$Path)
+        $keys = $Path -split '\.'
+        $current = $Obj
+        foreach ($key in $keys) {
+            if ($null -eq $current) { return $null }
+            if ($current -is [hashtable] -and $current.ContainsKey($key)) {
+                $current = $current[$key]
+            } else {
+                return $null
+            }
+        }
+        return $current
+    }
+
+    # Validate each schema entry
+    foreach ($entry in $schema.GetEnumerator()) {
+        $path = $entry.Key
+        $expectedType = $entry.Value
+        $value = Get-NestedValue -Obj $Config -Path $path
+
+        # Skip if value not present (optional fields)
+        if ($null -eq $value) { continue }
+
+        $valid = $false
+        $actualType = ""
+
+        switch -Regex ($expectedType) {
+            '^string$' {
+                $valid = $value -is [string]
+                $actualType = $value.GetType().Name
+            }
+            '^int$' {
+                $valid = $value -is [int] -or $value -is [long] -or ($value -is [string] -and $value -match '^\d+$')
+                $actualType = $value.GetType().Name
+            }
+            '^bool$' {
+                $valid = $value -is [bool]
+                $actualType = $value.GetType().Name
+            }
+            '^list$' {
+                $valid = $value -is [array] -or $value -is [System.Collections.ArrayList] -or $value -is [System.Collections.Generic.List[object]]
+                $actualType = $value.GetType().Name
+            }
+            '^hashtable$' {
+                $valid = $value -is [hashtable] -or $value -is [System.Collections.Specialized.OrderedDictionary]
+                $actualType = $value.GetType().Name
+            }
+            '^enum:(.+)$' {
+                $allowedValues = $Matches[1] -split ','
+                $valid = $value -in $allowedValues
+                $actualType = "value '$value'"
+                if (-not $valid) {
+                    $errors += "  - $path : expected one of [$($allowedValues -join ', ')], got $actualType"
+                    continue
+                }
+            }
+        }
+
+        if (-not $valid -and $expectedType -notmatch '^enum:') {
+            $errors += "  - $path : expected $expectedType, got $actualType (value: $value)"
+        }
+    }
+
+    return $errors
+}
+
 function Ensure-YamlModule {
     <#
     .SYNOPSIS
@@ -670,6 +935,24 @@ if ($ConfigFile -and (Test-Path $ConfigFile)) {
 }
 
 $Script:DryRun = $DryRun
+
+# Validate configuration schema
+# -----------------------------
+# Validates all config values against expected types. Reports ALL errors before failing.
+Write-Header "CONFIGURATION VALIDATION"
+$validationErrors = Validate-ConfigSchema -Config $Script:Config
+if ($validationErrors.Count -gt 0) {
+    Write-Status "Configuration errors found:" "Error"
+    Write-Host ""
+    foreach ($err in $validationErrors) {
+        Write-Host $err -ForegroundColor Red
+    }
+    Write-Host ""
+    Write-Status "Fix the above errors in your config.yml before continuing." "Error"
+    exit 1
+} else {
+    Write-Status "Configuration schema valid" "Success"
+}
 
 # Create System Restore Point
 # ---------------------------
