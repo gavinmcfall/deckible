@@ -157,6 +157,66 @@ function Get-InstallResults {
     return $Script:InstallResults
 }
 
+function Write-Summary {
+    <#
+    .SYNOPSIS
+        Outputs a formatted summary of installation results at end of run.
+    .DESCRIPTION
+        Displays: X installed, Y failed, Z skipped
+        Lists failed packages with their error messages.
+    #>
+    $results = Get-InstallResults
+
+    # Skip if no packages were processed
+    if ($results.Attempted -eq 0) {
+        return
+    }
+
+    Write-Host ""
+    Write-Host "=================================================================" -ForegroundColor Blue
+    Write-Host "  INSTALLATION SUMMARY" -ForegroundColor White
+    Write-Host "=================================================================" -ForegroundColor Blue
+    Write-Host ""
+
+    # Summary line: X installed, Y failed, Z skipped
+    $summaryParts = @()
+
+    if ($results.Succeeded -gt 0) {
+        $summaryParts += "$($results.Succeeded) installed"
+    }
+    if ($results.Failed -gt 0) {
+        $summaryParts += "$($results.Failed) failed"
+    }
+    if ($results.Skipped -gt 0) {
+        $summaryParts += "$($results.Skipped) skipped"
+    }
+
+    $summaryText = $summaryParts -join ", "
+    $summaryColor = if ($results.Failed -gt 0) { "Yellow" } else { "Green" }
+
+    Write-Host "  $summaryText" -ForegroundColor $summaryColor
+    Write-Host ""
+
+    # List failed packages with error messages
+    $failedPackages = $results.Packages | Where-Object { $_.Status -eq "failed" }
+
+    if ($failedPackages.Count -gt 0) {
+        Write-Host "  Failed packages:" -ForegroundColor Red
+        Write-Host ""
+
+        foreach ($pkg in $failedPackages) {
+            Write-Host "    [X] " -ForegroundColor Red -NoNewline
+            Write-Host "$($pkg.Name)" -ForegroundColor White -NoNewline
+            Write-Host " ($($pkg.PackageId))" -ForegroundColor Gray
+
+            if ($pkg.Message) {
+                Write-Host "        $($pkg.Message)" -ForegroundColor Yellow
+            }
+        }
+        Write-Host ""
+    }
+}
+
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
@@ -807,6 +867,9 @@ foreach ($moduleName in $moduleOrder) {
         . $modulePath
     }
 }
+
+# Display installation summary
+Write-Summary
 
 # Gather system information for summary
 function Get-NetworkSummary {
