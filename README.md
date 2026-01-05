@@ -165,6 +165,8 @@ bootible/
 └── private/                    # Your private config (separate repo)
 ```
 
+See [Architecture](docs/architecture.md) for bootstrap flow, config merge, and module dependency diagrams.
+
 ---
 
 ## Configuration Reference
