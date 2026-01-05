@@ -248,6 +248,86 @@ function Write-Header {
     Write-Host ""
 }
 
+$Script:JsonLogEnabled = $false
+$Script:JsonLogEntries = @()
+$Script:JsonLogPath = $null
+$Script:CurrentModule = $null
+
+function Get-CurrentModuleName {
+    if ($Script:CurrentModule) {
+        return $Script:CurrentModule
+    }
+    return "main"
+}
+
+function Initialize-JsonLogging {
+    $Script:JsonLogEnabled = $false
+    $Script:JsonLogEntries = @()
+    $Script:JsonLogPath = $null
+
+    try {
+        $logDir = Join-Path $env:USERPROFILE ".bootible\logs"
+        if (-not (Test-Path $logDir)) {
+            New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+        }
+
+        $dateStamp = Get-Date -Format "yyyyMMdd"
+        $Script:JsonLogPath = Join-Path $logDir "run-$dateStamp.json"
+
+        if (Test-Path $Script:JsonLogPath) {
+            try {
+                $existing = Get-Content $Script:JsonLogPath -Raw | ConvertFrom-Json
+                if ($existing) {
+                    $Script:JsonLogEntries = @($existing)
+                }
+            } catch {
+                $Script:JsonLogEntries = @()
+            }
+        }
+
+        $Script:JsonLogEnabled = $true
+    } catch {
+        $Script:JsonLogEnabled = $false
+    }
+}
+
+function Add-JsonLogEntry {
+    param(
+        [string]$Module,
+        [string]$Action,
+        [string]$Result,
+        [double]$DurationMs
+    )
+
+    if (-not $Script:JsonLogEnabled) {
+        return
+    }
+
+    $entry = [ordered]@{
+        timestamp = (Get-Date).ToString("o")
+        module = if ($Module) { $Module } else { "main" }
+        action = $Action
+        result = $Result
+        duration_ms = [math]::Round($DurationMs, 2)
+    }
+
+    $Script:JsonLogEntries += $entry
+}
+
+function Write-JsonLog {
+    if (-not $Script:JsonLogEnabled -or -not $Script:JsonLogPath) {
+        return
+    }
+
+    try {
+        $payload = $Script:JsonLogEntries | ConvertTo-Json -Depth 6
+        $payload | Out-File -FilePath $Script:JsonLogPath -Encoding utf8
+        Write-Status "JSON log saved: $Script:JsonLogPath" "Info"
+    } catch {
+        Write-Status "Failed to write JSON log: $_" "Warning"
+    }
+}
+
 function Test-WingetInstalled {
     try {
         $null = Get-Command winget -ErrorAction Stop
@@ -726,12 +806,22 @@ function Install-WingetPackage {
         [int]$TimeoutSeconds = 300  # 5 minute timeout per source (larger packages like VLC need more time)
     )
 
+    $operationStart = Get-Date
+    $logAction = "install:$Name"
+    $logModule = Get-CurrentModuleName
+    $completeLog = {
+        param([string]$Result)
+        $durationMs = (Get-Date - $operationStart).TotalMilliseconds
+        Add-JsonLogEntry -Module $logModule -Action $logAction -Result $Result -DurationMs $durationMs
+    }
+
     # Check if already installed first (even in DryRun)
     try {
         # Check both sources for existing installation
         $installed = winget list --id $PackageId --accept-source-agreements 2>$null
         if ($installed -match $PackageId) {
             Write-Status "$Name already installed - skipping" "Success"
+            & $completeLog "skipped"
             return $true
         }
     } catch {
@@ -770,14 +860,17 @@ function Install-WingetPackage {
         if ($foundInWinget) {
             Write-Host " OK (winget)" -ForegroundColor Green
             Write-Status "[DRY RUN] Would install: $Name ($PackageId) from winget" "Info"
+            & $completeLog "dry_run"
             return $true
         } elseif ($foundInMsStore) {
             Write-Host " OK (msstore)" -ForegroundColor Yellow
             Write-Status "[DRY RUN] Would install: $Name ($PackageId) from msstore (fallback)" "Info"
+            & $completeLog "dry_run"
             return $true
         } else {
             Write-Host " NOT FOUND" -ForegroundColor Red
             Write-Status "[DRY RUN] Package not found in any source: $PackageId" "Warning"
+            & $completeLog "not_found"
             return $false
         }
     }
@@ -819,6 +912,7 @@ function Install-WingetPackage {
             Write-Host "    Winget timed out after ${TimeoutSeconds}s" -ForegroundColor Yellow
         } elseif ($result.ExitCode -eq 0) {
             Write-Status "$Name installed (winget)" "Success"
+            & $completeLog "success"
             return $true
         } else {
             Write-Host "    Winget source failed (exit code $($result.ExitCode))" -ForegroundColor Yellow
@@ -834,6 +928,7 @@ function Install-WingetPackage {
             Write-Host "    msstore timed out after ${TimeoutSeconds}s" -ForegroundColor Red
         } elseif ($result.ExitCode -eq 0) {
             Write-Status "$Name installed (msstore fallback)" "Success"
+            & $completeLog "success"
             return $true
         } else {
             Write-Host "    msstore also failed (exit code $($result.ExitCode))" -ForegroundColor Red
@@ -848,6 +943,7 @@ function Install-WingetPackage {
             Write-Host "    $line" -ForegroundColor Yellow
         }
     }
+    & $completeLog "failed"
     return $false
 }
 
@@ -875,9 +971,19 @@ function Install-DirectDownload {
         [scriptblock]$PostInstall = $null
     )
 
+    $operationStart = Get-Date
+    $logAction = "download-install:$Name"
+    $logModule = Get-CurrentModuleName
+    $completeLog = {
+        param([string]$Result)
+        $durationMs = (Get-Date - $operationStart).TotalMilliseconds
+        Add-JsonLogEntry -Module $logModule -Action $logAction -Result $Result -DurationMs $durationMs
+    }
+
     if ($Script:DryRun) {
         Write-Status "[DRY RUN] Would download and install: $Name" "Info"
         Write-Host "    URL: $Url" -ForegroundColor Gray
+        & $completeLog "dry_run"
         return $true
     }
 
@@ -933,13 +1039,16 @@ function Install-DirectDownload {
                 }
             }
 
+            & $completeLog "success"
             return $true
         } else {
             Write-Status "$Name installer exited with code: $($process.ExitCode)" "Warning"
+            & $completeLog "failed"
             return $false
         }
     } catch {
         Write-Status "Failed to download/install $Name : $_" "Error"
+        & $completeLog "failed"
         return $false
     } finally {
         # Cleanup
@@ -1092,6 +1201,11 @@ if ($validationErrors.Count -gt 0) {
     Write-Status "Configuration schema valid" "Success"
 }
 
+Initialize-JsonLogging
+if ($Script:JsonLogEnabled) {
+    Write-Status "JSON logging enabled" "Info"
+}
+
 # Create System Restore Point
 # ---------------------------
 # Creates a restore point before making changes (unless disabled or dry run)
@@ -1134,7 +1248,8 @@ $moduleOrder = @(
     "emulation",
     "rog_ally",
     "optimization",   # Optimization after all installs
-    "debloat"         # Debloat last (configures installed apps like PS7)
+    "debloat",        # Debloat last (configures installed apps like PS7)
+    "health"          # Post-install checks
 )
 
 foreach ($moduleName in $moduleOrder) {
@@ -1146,8 +1261,10 @@ foreach ($moduleName in $moduleOrder) {
     }
 
     if (Test-Path $modulePath) {
+        $Script:CurrentModule = $moduleName
         Write-Header $moduleName.ToUpper()
         . $modulePath
+        $Script:CurrentModule = $null
     }
 }
 
@@ -1221,6 +1338,8 @@ if (-not $Script:DryRun) {
     Write-Host "  - Check README for additional configuration"
     Write-Host ""
 }
+
+Write-JsonLog
 
 # Handle transcript and log push
 # If transcript was inherited from ally.ps1, let ally.ps1 handle stop/push
