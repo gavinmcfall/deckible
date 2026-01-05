@@ -74,6 +74,10 @@ $helpersPath = Join-Path $PSScriptRoot "lib/helpers.ps1"
 if (Test-Path $helpersPath) {
     . $helpersPath
 }
+$validationPath = Join-Path $PSScriptRoot "lib/config-validation.ps1"
+if (Test-Path $validationPath) {
+    . $validationPath
+}
 $Script:BootibleRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $Script:DeviceRoot = $PSScriptRoot
 $Script:PrivateRoot = Join-Path $Script:BootibleRoot "private"
@@ -811,7 +815,7 @@ function Install-WingetPackage {
     $logModule = Get-CurrentModuleName
     $completeLog = {
         param([string]$Result)
-        $durationMs = (Get-Date - $operationStart).TotalMilliseconds
+        $durationMs = ((Get-Date) - $operationStart).TotalMilliseconds
         Add-JsonLogEntry -Module $logModule -Action $logAction -Result $Result -DurationMs $durationMs
     }
 
@@ -976,7 +980,7 @@ function Install-DirectDownload {
     $logModule = Get-CurrentModuleName
     $completeLog = {
         param([string]$Result)
-        $durationMs = (Get-Date - $operationStart).TotalMilliseconds
+        $durationMs = ((Get-Date) - $operationStart).TotalMilliseconds
         Add-JsonLogEntry -Module $logModule -Action $logAction -Result $Result -DurationMs $durationMs
     }
 
@@ -1178,6 +1182,22 @@ if ($ConfigFile -and (Test-Path $ConfigFile)) {
                 Write-Status "Merged config: $(Split-Path $selectedConfig -Leaf)" "Info"
             }
         }
+    }
+}
+
+if (Get-Command Validate-Config -ErrorAction SilentlyContinue) {
+    $validation = Validate-Config
+
+    foreach ($warning in $validation.Warnings) {
+        Write-Status $warning "Warning"
+    }
+
+    if (-not $validation.Valid) {
+        foreach ($error in $validation.Errors) {
+            Write-Status $error "Error"
+        }
+        Write-Status "Config validation failed" "Error"
+        exit 1
     }
 }
 

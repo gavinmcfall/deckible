@@ -50,7 +50,7 @@ function Invoke-HealthCheck {
         $detail = $_.Exception.Message
     }
 
-    $durationMs = (Get-Date - $start).TotalMilliseconds
+    $durationMs = ((Get-Date) - $start).TotalMilliseconds
     $resultLabel = if ($success) { "OK" } else { "FAILED" }
     $statusType = if ($success) { "Success" } else { "Error" }
 
