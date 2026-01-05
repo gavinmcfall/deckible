@@ -79,6 +79,144 @@ $Script:DeviceRoot = $PSScriptRoot
 $Script:PrivateRoot = Join-Path $Script:BootibleRoot "private"
 $Script:Config = @{}
 
+# Installation result tracking
+# Tracks attempted/succeeded/failed/skipped counts and per-package details
+$Script:InstallResults = @{
+    Attempted = 0
+    Succeeded = 0
+    Failed    = 0
+    Skipped   = 0
+    Packages  = @()
+}
+
+function Add-InstallResult {
+    <#
+    .SYNOPSIS
+        Records the result of a package installation attempt.
+    .PARAMETER PackageId
+        The winget package ID (e.g., "Microsoft.PowerShell")
+    .PARAMETER Name
+        Display name of the package
+    .PARAMETER Status
+        Result status: "succeeded", "failed", or "skipped"
+    .PARAMETER Source
+        Installation source used (e.g., "winget", "msstore", "direct")
+    .PARAMETER Message
+        Optional message with additional details
+    #>
+    param(
+        [Parameter(Mandatory)]
+        [string]$PackageId,
+        [Parameter(Mandatory)]
+        [string]$Name,
+        [Parameter(Mandatory)]
+        [ValidateSet("succeeded", "failed", "skipped")]
+        [string]$Status,
+        [string]$Source = "",
+        [string]$Message = ""
+    )
+
+    $Script:InstallResults.Attempted++
+
+    switch ($Status) {
+        "succeeded" { $Script:InstallResults.Succeeded++ }
+        "failed"    { $Script:InstallResults.Failed++ }
+        "skipped"   { $Script:InstallResults.Skipped++ }
+    }
+
+    $Script:InstallResults.Packages += @{
+        PackageId = $PackageId
+        Name      = $Name
+        Status    = $Status
+        Source    = $Source
+        Message   = $Message
+        Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    }
+}
+
+function Get-InstallResults {
+    <#
+    .SYNOPSIS
+        Returns the installation results summary and package details.
+    .PARAMETER SummaryOnly
+        If set, returns only the counts (Attempted/Succeeded/Failed/Skipped)
+    #>
+    param(
+        [switch]$SummaryOnly
+    )
+
+    if ($SummaryOnly) {
+        return @{
+            Attempted = $Script:InstallResults.Attempted
+            Succeeded = $Script:InstallResults.Succeeded
+            Failed    = $Script:InstallResults.Failed
+            Skipped   = $Script:InstallResults.Skipped
+        }
+    }
+
+    return $Script:InstallResults
+}
+
+function Write-Summary {
+    <#
+    .SYNOPSIS
+        Outputs a formatted summary of installation results at end of run.
+    .DESCRIPTION
+        Displays: X installed, Y failed, Z skipped
+        Lists failed packages with their error messages.
+    #>
+    $results = Get-InstallResults
+
+    # Skip if no packages were processed
+    if ($results.Attempted -eq 0) {
+        return
+    }
+
+    Write-Host ""
+    Write-Host "=================================================================" -ForegroundColor Blue
+    Write-Host "  INSTALLATION SUMMARY" -ForegroundColor White
+    Write-Host "=================================================================" -ForegroundColor Blue
+    Write-Host ""
+
+    # Summary line: X installed, Y failed, Z skipped
+    $summaryParts = @()
+
+    if ($results.Succeeded -gt 0) {
+        $summaryParts += "$($results.Succeeded) installed"
+    }
+    if ($results.Failed -gt 0) {
+        $summaryParts += "$($results.Failed) failed"
+    }
+    if ($results.Skipped -gt 0) {
+        $summaryParts += "$($results.Skipped) skipped"
+    }
+
+    $summaryText = $summaryParts -join ", "
+    $summaryColor = if ($results.Failed -gt 0) { "Yellow" } else { "Green" }
+
+    Write-Host "  $summaryText" -ForegroundColor $summaryColor
+    Write-Host ""
+
+    # List failed packages with error messages
+    $failedPackages = $results.Packages | Where-Object { $_.Status -eq "failed" }
+
+    if ($failedPackages.Count -gt 0) {
+        Write-Host "  Failed packages:" -ForegroundColor Red
+        Write-Host ""
+
+        foreach ($pkg in $failedPackages) {
+            Write-Host "    [X] " -ForegroundColor Red -NoNewline
+            Write-Host "$($pkg.Name)" -ForegroundColor White -NoNewline
+            Write-Host " ($($pkg.PackageId))" -ForegroundColor Gray
+
+            if ($pkg.Message) {
+                Write-Host "        $($pkg.Message)" -ForegroundColor Yellow
+            }
+        }
+        Write-Host ""
+    }
+}
+
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
@@ -1012,6 +1150,9 @@ foreach ($moduleName in $moduleOrder) {
         . $modulePath
     }
 }
+
+# Display installation summary
+Write-Summary
 
 # Gather system information for summary
 function Get-NetworkSummary {
