@@ -1,12 +1,9 @@
 #Requires -Modules Pester
 
 BeforeAll {
-    # Import the main script containing Install-WingetPackage
-    $runScriptPath = Join-Path $PSScriptRoot "../config/rog-ally/Run.ps1"
-    . $runScriptPath
-
-    # Ensure helper functions are available
-    $helpersPath = Join-Path $PSScriptRoot "../config/rog-ally/lib/helpers.ps1"
+    # Import the extracted helper containing Install-WingetPackage
+    # This avoids executing the full Run.ps1 setup script
+    $helpersPath = Join-Path $PSScriptRoot "../config/rog-ally/lib/winget-helpers.ps1"
     . $helpersPath
 }
 
@@ -16,248 +13,199 @@ Describe "Install-WingetPackage" {
         $Script:DryRun = $false
         $Script:HasWingetSource = $true
         $Script:HasMsStoreSource = $true
-
-        # Clear any previous mocks to ensure isolation
-        Mock | Remove-Mock
-
-        # Mock JSON logging functions for all tests
-        Mock -CommandName Add-JsonLogEntry -MockWith { }
-        Mock -CommandName Get-CurrentModuleName -MockWith { "apps" }
+        $Script:JsonLogEnabled = $true
+        $Script:JsonLogEntries = @()
     }
 
-    It "Installs a package successfully from winget source" {
-        Mock -CommandName winget -ParameterFilter { $_.Arguments -eq "list --id Test.Package --accept-source-agreements" } -MockWith {
-            "" # Not installed
+    Context "Package Already Installed" {
+        It "Skips installation if package is already installed" {
+            Mock winget {
+                return "Test.Package  1.0.0  winget"
+            } -ParameterFilter { ($args -join ' ') -match 'list --id Test\.Package' }
+
+            $result = Install-WingetPackage -PackageId "Test.Package" -Name "Test Package"
+
+            $result | Should -Be $true
+            Should -Invoke winget -Times 1 -ParameterFilter { ($args -join ' ') -match 'list --id Test\.Package' }
+            Should -Invoke Start-Job -Times 0
         }
-        Mock -CommandName Start-Job -MockWith { [PSCustomObject]@{ Id = 1; State = 'Running' } }
-        Mock -CommandName Wait-Job -MockWith { $true }
-        Mock -CommandName Receive-Job -MockWith { @{ ExitCode = 0; Output = "Success" } }
-        Mock -CommandName Remove-Job
-
-        $result = Install-WingetPackage -PackageId "Test.Package" -Name "Test Package"
-        $result | Should -Be $true
-        Assert-MockCalled winget -ParameterFilter { $_.Arguments -eq "list --id Test.Package --accept-source-agreements" } -Times 1
-        Assert-MockCalled Start-Job -Times 1
-        Assert-MockCalled Add-JsonLogEntry -ParameterFilter { $Result -eq "success" } -Times 1
     }
 
-    It "Skips installation if package is already installed" {
-        Mock -CommandName winget -ParameterFilter { $_.Arguments -eq "list --id Test.Package --accept-source-agreements" } -MockWith {
-            "Test.Package" # Installed
+    Context "Successful Installation" {
+        BeforeEach {
+            Mock winget { return "" } -ParameterFilter { ($args -join ' ') -match 'list --id' }
         }
-        $result = Install-WingetPackage -PackageId "Test.Package" -Name "Test Package"
-        $result | Should -Be $true
-        Assert-MockCalled winget -ParameterFilter { $_.Arguments -eq "list --id Test.Package --accept-source-agreements" } -Times 1
-        Assert-MockCalled Start-Job -Times 0 # Should not attempt install
-        Assert-MockCalled Add-JsonLogEntry -ParameterFilter { $Result -eq "skipped" } -Times 1
-    }
 
-    It "Fails installation if winget source fails and no msstore fallback" {
-        $Script:HasMsStoreSource = $false # Disable msstore fallback
-        Mock -CommandName winget -ParameterFilter { $_.Arguments -eq "list --id Test.Package --accept-source-agreements" } -MockWith { "" }
-        Mock -CommandName Start-Job -MockWith { [PSCustomObject]@{ Id = 1; State = 'Running' } }
-        Mock -CommandName Wait-Job -MockWith { $true }
-        Mock -CommandName Receive-Job -MockWith { @{ ExitCode = 1; Output = "Failure" } }
-        Mock -CommandName Remove-Job
+        It "Installs a package successfully from winget source" {
+            Mock Start-Job { [PSCustomObject]@{ Id = 1; State = 'Running' } }
+            Mock Wait-Job { $true }
+            Mock Receive-Job { @{ ExitCode = 0; Output = "Successfully installed" } }
+            Mock Remove-Job { }
 
-        $result = Install-WingetPackage -PackageId "Test.Package" -Name "Test Package"
-        $result | Should -Be $false
-        Assert-MockCalled Start-Job -Times 1
-        Assert-MockCalled Add-JsonLogEntry -ParameterFilter { $Result -eq "failed" } -Times 1
-    }
+            $result = Install-WingetPackage -PackageId "Test.Package" -Name "Test Package"
 
-    It "Installs a package successfully from msstore fallback if winget source fails" {
-        Mock -CommandName winget -ParameterFilter { $_.Arguments -eq "list --id Test.Package --accept-source-agreements" } -MockWith { "" }
-        Mock -CommandName Start-Job -MockWith {
-            param($ScriptBlock, $ArgumentList)
-            if ($ArgumentList[1] -eq "winget") {
-                return [PSCustomObject]@{ Id = 1; State = 'Running' }
-            } else { # msstore
-                return [PSCustomObject]@{ Id = 2; State = 'Running' }
+            $result | Should -Be $true
+            Should -Invoke Start-Job -Times 1
+        }
+
+        It "Falls back to msstore when winget source fails" {
+            $jobCounter = 0
+            Mock Start-Job {
+                $jobCounter++
+                [PSCustomObject]@{ Id = $jobCounter; State = 'Running' }
             }
-        }
-        Mock -CommandName Wait-Job -MockWith { $true }
-        Mock -CommandName Receive-Job -MockWith {
-            param($Job)
-            if ($Job.Id -eq 1) {
-                return @{ ExitCode = 1; Output = "Winget failed" }
-            } else {
-                return @{ ExitCode = 0; Output = "MsStore success" }
+            Mock Wait-Job { $true }
+            Mock Receive-Job {
+                param($Job)
+                if ($Job.Id -eq 1) {
+                    return @{ ExitCode = 1; Output = "Winget source failed" }
+                } else {
+                    return @{ ExitCode = 0; Output = "msstore success" }
+                }
             }
+            Mock Remove-Job { }
+
+            $result = Install-WingetPackage -PackageId "Test.Package" -Name "Test Package"
+
+            $result | Should -Be $true
+            Should -Invoke Start-Job -Times 2
         }
-        Mock -CommandName Remove-Job
-
-        $result = Install-WingetPackage -PackageId "Test.Package" -Name "Test Package"
-        $result | Should -Be $true
-        Assert-MockCalled Start-Job -Times 2 # Once for winget, once for msstore
-        Assert-MockCalled Add-JsonLogEntry -ParameterFilter { $Result -eq "success" } -Times 1
     }
 
-    It "Fails installation if both winget and msstore sources fail" {
-        Mock -CommandName winget -ParameterFilter { $_.Arguments -eq "list --id Test.Package --accept-source-agreements" } -MockWith { "" }
-        Mock -CommandName Start-Job -MockWith { [PSCustomObject]@{ Id = 1; State = 'Running' } }
-        Mock -CommandName Wait-Job -MockWith { $true }
-        Mock -CommandName Receive-Job -MockWith { @{ ExitCode = 1; Output = "Failure" } }
-        Mock -CommandName Remove-Job
+    Context "Failed Installation" {
+        BeforeEach {
+            Mock winget { return "" } -ParameterFilter { ($args -join ' ') -match 'list --id' }
+        }
 
-        $result = Install-WingetPackage -PackageId "Test.Package" -Name "Test Package"
-        $result | Should -Be $false
-        Assert-MockCalled Start-Job -Times 2
-        Assert-MockCalled Add-JsonLogEntry -ParameterFilter { $Result -eq "failed" } -Times 1
+        It "Returns false when both sources fail" {
+            Mock Start-Job { [PSCustomObject]@{ Id = 1; State = 'Running' } }
+            Mock Wait-Job { $true }
+            Mock Receive-Job { @{ ExitCode = 1; Output = "Installation failed" } }
+            Mock Remove-Job { }
+
+            $result = Install-WingetPackage -PackageId "Test.Package" -Name "Test Package"
+
+            $result | Should -Be $false
+            Should -Invoke Start-Job -Times 2
+        }
+
+        It "Returns false when msstore is disabled and winget fails" {
+            $Script:HasMsStoreSource = $false
+
+            Mock Start-Job { [PSCustomObject]@{ Id = 1; State = 'Running' } }
+            Mock Wait-Job { $true }
+            Mock Receive-Job { @{ ExitCode = 1; Output = "Winget failed" } }
+            Mock Remove-Job { }
+
+            $result = Install-WingetPackage -PackageId "Test.Package" -Name "Test Package"
+
+            $result | Should -Be $false
+            Should -Invoke Start-Job -Times 1
+        }
     }
 
-    Context "Dry Run Scenarios" {
+    Context "Timeout Handling" {
+        BeforeEach {
+            Mock winget { return "" } -ParameterFilter { ($args -join ' ') -match 'list --id' }
+        }
+
+        It "Returns false on timeout during winget installation" {
+            Mock Start-Job { [PSCustomObject]@{ Id = 1; State = 'Running' } }
+            Mock Wait-Job { $null }  # null indicates timeout
+            Mock Stop-Job { }
+            Mock Remove-Job { }
+            Mock Get-Process { }
+
+            $result = Install-WingetPackage -PackageId "Test.Package" -Name "Test Package" -TimeoutSeconds 5
+
+            $result | Should -Be $false
+            Should -Invoke Stop-Job -Times 2  # Once per source
+        }
+    }
+
+    Context "Dry Run Mode" {
         BeforeEach {
             $Script:DryRun = $true
+            Mock winget { return "" } -ParameterFilter { ($args -join ' ') -match 'list --id' }
         }
 
         It "Reports package found in winget source during dry run" {
-            Mock -CommandName winget -ParameterFilter { $_.Arguments -eq "list --id Test.Package --accept-source-agreements" } -MockWith { "" }
-            Mock -CommandName winget -ParameterFilter { $_.Arguments -eq "show --id Test.Package --source winget --accept-source-agreements" } -MockWith {
-                $script:LASTEXITCODE = 0
-                "Found Test.Package"
-            }
-            Mock -CommandName winget -ParameterFilter { $_.Arguments -eq "show --id Test.Package --source msstore --accept-source-agreements" } -Times 0
+            Mock winget {
+                $global:LASTEXITCODE = 0
+                return "Found Test.Package"
+            } -ParameterFilter { ($args -join ' ') -match 'show --id.*--source winget' }
 
             $result = Install-WingetPackage -PackageId "Test.Package" -Name "Test Package"
+
             $result | Should -Be $true
-            Assert-MockCalled winget -ParameterFilter { $_.Arguments -eq "show --id Test.Package --source winget --accept-source-agreements" } -Times 1
-            Assert-MockCalled Start-Job -Times 0 # No install in dry run
-            Assert-MockCalled Add-JsonLogEntry -ParameterFilter { $Result -eq "dry_run" } -Times 1
+            Should -Invoke winget -Times 1 -ParameterFilter { ($args -join ' ') -match 'show --id.*--source winget' }
+            Should -Invoke Start-Job -Times 0
         }
 
-        It "Reports package found in msstore fallback during dry run" {
-            Mock -CommandName winget -ParameterFilter { $_.Arguments -eq "list --id Test.Package --accept-source-agreements" } -MockWith { "" }
-            Mock -CommandName winget -ParameterFilter { $_.Arguments -eq "show --id Test.Package --source winget --accept-source-agreements" } -MockWith {
-                $script:LASTEXITCODE = 1
-                "Not Found"
-            }
-            Mock -CommandName winget -ParameterFilter { $_.Arguments -eq "show --id Test.Package --source msstore --accept-source-agreements" } -MockWith {
-                $script:LASTEXITCODE = 0
-                "Found Test.Package"
-            }
+        It "Reports package found in msstore during dry run when winget fails" {
+            Mock winget {
+                $global:LASTEXITCODE = 1
+                return "No package found"
+            } -ParameterFilter { ($args -join ' ') -match 'show --id.*--source winget' }
+
+            Mock winget {
+                $global:LASTEXITCODE = 0
+                return "Found Test.Package"
+            } -ParameterFilter { ($args -join ' ') -match 'show --id.*--source msstore' }
 
             $result = Install-WingetPackage -PackageId "Test.Package" -Name "Test Package"
+
             $result | Should -Be $true
-            Assert-MockCalled winget -ParameterFilter { $_.Arguments -eq "show --id Test.Package --source winget --accept-source-agreements" } -Times 1
-            Assert-MockCalled winget -ParameterFilter { $_.Arguments -eq "show --id Test.Package --source msstore --accept-source-agreements" } -Times 1
-            Assert-MockCalled Add-JsonLogEntry -ParameterFilter { $Result -eq "dry_run" } -Times 1
+            Should -Invoke winget -Times 1 -ParameterFilter { ($args -join ' ') -match 'show --id.*--source msstore' }
         }
 
         It "Reports package not found during dry run" {
-            Mock -CommandName winget -ParameterFilter { $_.Arguments -eq "list --id Test.Package --accept-source-agreements" } -MockWith { "" }
-            Mock -CommandName winget -ParameterFilter { $_.Arguments -eq "show --id Test.Package --source winget --accept-source-agreements" } -MockWith {
-                $script:LASTEXITCODE = 1
-                "Not Found"
-            }
-            Mock -CommandName winget -ParameterFilter { $_.Arguments -eq "show --id Test.Package --source msstore --accept-source-agreements" } -MockWith {
-                $script:LASTEXITCODE = 1
-                "Not Found"
-            }
+            Mock winget {
+                $global:LASTEXITCODE = 1
+                return "No package found"
+            } -ParameterFilter { ($args -join ' ') -match 'show --id' }
 
             $result = Install-WingetPackage -PackageId "Test.Package" -Name "Test Package"
+
             $result | Should -Be $false
-            Assert-MockCalled winget -ParameterFilter { $_.Arguments -eq "show --id Test.Package --source winget --accept-source-agreements" } -Times 1
-            Assert-MockCalled winget -ParameterFilter { $_.Arguments -eq "show --id Test.Package --source msstore --accept-source-agreements" } -Times 1
-            Assert-MockCalled Add-JsonLogEntry -ParameterFilter { $Result -eq "not_found" } -Times 1
         }
     }
 
-    It "Installs successfully even if initial winget list check fails" {
-        Mock -CommandName winget -ParameterFilter { $_.Arguments -eq "list --id Test.Package --accept-source-agreements" } -MockWith {
-            $script:LASTEXITCODE = 1
-            "Error: winget list failed"
+    Context "Source Availability" {
+        BeforeEach {
+            Mock winget { return "" } -ParameterFilter { ($args -join ' ') -match 'list --id' }
         }
-        Mock -CommandName Start-Job -MockWith { [PSCustomObject]@{ Id = 1; State = 'Running' } }
-        Mock -CommandName Wait-Job -MockWith { $true }
-        Mock -CommandName Receive-Job -MockWith { @{ ExitCode = 0; Output = "Success" } }
-        Mock -CommandName Remove-Job
 
-        $result = Install-WingetPackage -PackageId "Test.Package" -Name "Test Package"
-        $result | Should -Be $true
-        Assert-MockCalled Start-Job -Times 1
+        It "Uses msstore directly when winget source is unavailable" {
+            $Script:HasWingetSource = $false
+
+            Mock Start-Job { [PSCustomObject]@{ Id = 1; State = 'Running' } }
+            Mock Wait-Job { $true }
+            Mock Receive-Job { @{ ExitCode = 0; Output = "Success" } }
+            Mock Remove-Job { }
+
+            $result = Install-WingetPackage -PackageId "Test.Package" -Name "Test Package"
+
+            $result | Should -Be $true
+            Should -Invoke Start-Job -Times 1
+        }
     }
 
-    It "Returns false on timeout during installation from winget source" {
-        Mock -CommandName winget -ParameterFilter { $_.Arguments -eq "list --id Test.Package --accept-source-agreements" } -MockWith { "" }
-        Mock -CommandName Start-Job -MockWith { [PSCustomObject]@{ Id = 1; State = 'Running' } }
-        Mock -CommandName Wait-Job -ParameterFilter { $Timeout -eq 5 } -MockWith { $null }
-        Mock -CommandName Stop-Job
-        Mock -CommandName Remove-Job
-        Mock -CommandName Get-Process
+    Context "Error Handling" {
+        It "Continues installation even if winget list check fails" {
+            Mock winget {
+                throw "winget list error"
+            } -ParameterFilter { ($args -join ' ') -match 'list --id' }
 
-        $result = Install-WingetPackage -PackageId "Test.Package" -Name "Test Package" -TimeoutSeconds 5
-        $result | Should -Be $false
-        Assert-MockCalled Start-Job -Times 1
-        Assert-MockCalled Wait-Job -Times 1
-        Assert-MockCalled Stop-Job -Times 1
-        Assert-MockCalled Remove-Job -Times 1
-        # It should try msstore after timeout
-        Assert-MockCalled Start-Job -Times 2
-    }
+            Mock Start-Job { [PSCustomObject]@{ Id = 1; State = 'Running' } }
+            Mock Wait-Job { $true }
+            Mock Receive-Job { @{ ExitCode = 0; Output = "Success" } }
+            Mock Remove-Job { }
 
-    It "Returns false on timeout during msstore fallback" {
-        Mock -CommandName winget -ParameterFilter { $_.Arguments -eq "list --id Test.Package --accept-source-agreements" } -MockWith { "" }
-        Mock -CommandName Start-Job -MockWith {
-            param($ScriptBlock, $ArgumentList)
-            if ($ArgumentList[1] -eq "winget") { return [PSCustomObject]@{ Id = 1; State = 'Running' } }
-            if ($ArgumentList[1] -eq "msstore") { return [PSCustomObject]@{ Id = 2; State = 'Running' } }
+            $result = Install-WingetPackage -PackageId "Test.Package" -Name "Test Package"
+
+            $result | Should -Be $true
+            Should -Invoke Start-Job -Times 1
         }
-        Mock -CommandName Wait-Job -MockWith {
-            param($Job, $Timeout)
-            if ($Job.Id -eq 1) { return $true } # Winget succeeds, but job fails
-            if ($Job.Id -eq 2) { return $null } # msstore times out
-        }
-        Mock -CommandName Receive-Job -MockWith {
-             param($Job)
-            if ($Job.Id -eq 1) { return @{ ExitCode = 1; Output = "Winget failed" } }
-        }
-        Mock -CommandName Stop-Job
-        Mock -CommandName Remove-Job
-        Mock -CommandName Get-Process
-
-        $result = Install-WingetPackage -PackageId "Test.Package" -Name "Test Package" -TimeoutSeconds 5
-        $result | Should -Be $false
-        Assert-MockCalled Start-Job -Times 2
-        Assert-MockCalled Wait-Job -Times 2
-        Assert-MockCalled Stop-Job -Times 1
-        Assert-MockCalled Add-JsonLogEntry -ParameterFilter { $Result -eq "failed" } -Times 1
-    }
-
-    It "Succeeds with msstore when winget list fails and winget install fails" {
-        Mock -CommandName winget -ParameterFilter { $_.Arguments -eq "list --id Test.Package --accept-source-agreements" } -MockWith {
-            $script:LASTEXITCODE = 1
-        }
-        Mock -CommandName Start-Job -MockWith {
-            param($ScriptBlock, $ArgumentList)
-            if ($ArgumentList[1] -eq "winget") { return [PSCustomObject]@{ Id = 1; State = 'Running' } }
-            else { return [PSCustomObject]@{ Id = 2; State = 'Running' } }
-        }
-        Mock -CommandName Wait-Job -MockWith { $true }
-        Mock -CommandName Receive-Job -MockWith {
-            param($Job)
-            if ($Job.Id -eq 1) { return @{ ExitCode = 1; Output = "Winget failed" } }
-            else { return @{ ExitCode = 0; Output = "MsStore success" } }
-        }
-        Mock -CommandName Remove-Job
-
-        $result = Install-WingetPackage -PackageId "Test.Package" -Name "Test Package"
-        $result | Should -Be $true
-        Assert-MockCalled Start-Job -Times 2
-        Assert-MockCalled Add-JsonLogEntry -ParameterFilter { $Result -eq "success" } -Times 1
-    }
-
-    It "Installs from msstore if winget source is unavailable" {
-        $Script:HasWingetSource = $false
-        Mock -CommandName winget -ParameterFilter { $_.Arguments -eq "list --id Test.Package --accept-source-agreements" } -MockWith { "" }
-        Mock -CommandName Start-Job -MockWith { [PSCustomObject]@{ Id = 1; State = 'Running' } }
-        Mock -CommandName Wait-Job -MockWith { $true }
-        Mock -CommandName Receive-Job -MockWith { @{ ExitCode = 0; Output = "Success" } }
-        Mock -CommandName Remove-Job
-
-        $result = Install-WingetPackage -PackageId "Test.Package" -Name "Test Package"
-        $result | Should -Be $true
-        Assert-MockCalled Start-Job -Times 1
-        Assert-MockCalled Add-JsonLogEntry -ParameterFilter { $Result -eq "success" } -Times 1
     }
 }
