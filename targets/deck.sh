@@ -599,28 +599,33 @@ needs_github_auth() {
 
 # Clone bootible
 clone_bootible() {
-    # Public repo - force HTTPS (disable SSH rewrites and credential helpers)
+    # Public repo - ignore global git config to avoid SSH rewrites
     # Some users have git configured to rewrite HTTPS to SSH, which fails without keys
-    local git_opts=(
-        -c credential.helper=''
-        -c 'url.https://github.com/.insteadOf=git@github.com:'
-        -c 'url.https://github.com/.insteadOf=ssh://git@github.com/'
-    )
+    # GIT_CONFIG_GLOBAL=/dev/null ignores ~/.gitconfig entirely for this clone
+    export GIT_CONFIG_GLOBAL=/dev/null
+    export GIT_CONFIG_SYSTEM=/dev/null
+    export GIT_TERMINAL_PROMPT=0
 
     if [[ -d "$BOOTIBLE_DIR/.git" ]]; then
         echo -e "${BLUE}→${NC} Updating existing bootible..."
         cd "$BOOTIBLE_DIR"
         # Ensure we're on main and have latest code (force reset to avoid stale files)
-        GIT_TERMINAL_PROMPT=0 git "${git_opts[@]}" fetch origin main
+        git fetch origin main
         git reset --hard origin/main
         git clean -fd
     else
         echo -e "${BLUE}→${NC} Cloning bootible..."
         rm -rf "$BOOTIBLE_DIR" 2>/dev/null || true
-        # Clone without any credential helpers (public repo, no auth needed)
-        GIT_TERMINAL_PROMPT=0 git "${git_opts[@]}" clone https://github.com/gavinmcfall/bootible.git "$BOOTIBLE_DIR"
+        # Clone public repo (no auth needed, no config interference)
+        git clone https://github.com/gavinmcfall/bootible.git "$BOOTIBLE_DIR"
         cd "$BOOTIBLE_DIR"
     fi
+
+    # Restore normal git config for rest of script
+    unset GIT_CONFIG_GLOBAL
+    unset GIT_CONFIG_SYSTEM
+    unset GIT_TERMINAL_PROMPT
+
     echo -e "${GREEN}✓${NC} Bootible ready at $BOOTIBLE_DIR"
 }
 
