@@ -62,7 +62,9 @@ start_logging() {
     # Start in temp, move to private/logs later if available
     LOG_FILE="/tmp/bootible_${log_filename}"
 
-    # Start logging with script command (tee-style logging)
+    # Start logging - use script command for proper tty handling
+    # This preserves stdin for interactive prompts while logging output
+    exec 3>&1 4>&2
     exec > >(tee -a "$LOG_FILE") 2>&1
 
     echo "=== Bootible Log Started: $(date) ==="
@@ -561,15 +563,23 @@ setup_private() {
 
     # If not provided via argument, prompt interactively
     if [[ -z "$PRIVATE_REPO" ]]; then
-        echo ""
-        echo -n "Do you have a private config repo? (y/N): "
+        echo "" > /dev/tty
+        echo -n "Do you have a private config repo? (y/N): " > /dev/tty
         read -r response < /dev/tty
 
         if [[ "$response" =~ ^[Yy]$ ]]; then
-            echo -n "Private repo (e.g., owner/repo): "
+            echo -n "Your GitHub username: " > /dev/tty
+            read -r github_user < /dev/tty
+            GITHUB_USER="$github_user"
+
+            echo -n "Private repo name (e.g., ${github_user:-owner}/repo): " > /dev/tty
             read -r repo_path < /dev/tty
 
             if [[ -n "$repo_path" ]]; then
+                # If repo_path doesn't contain /, prepend the username
+                if [[ "$repo_path" != *"/"* && -n "$github_user" ]]; then
+                    repo_path="${github_user}/${repo_path}"
+                fi
                 PRIVATE_REPO="https://github.com/$repo_path.git"
             fi
         fi
@@ -593,6 +603,11 @@ setup_private() {
         }
     fi
 
+    # Configure gh to store credentials for git
+    if command -v gh &>/dev/null && gh auth status &>/dev/null 2>&1; then
+        gh auth setup-git 2>/dev/null || true
+    fi
+
     # Clone or update private repo
     if [[ -d "$PRIVATE_PATH/.git" ]]; then
         echo "  Updating existing private config..."
@@ -608,12 +623,15 @@ setup_private() {
             echo "    Using GitHub CLI to clone..."
             local repo_slug
             repo_slug=$(echo "$PRIVATE_REPO" | sed 's|https://github.com/||' | sed 's|\.git$||' | sed 's|git@github.com:||')
-            if gh repo clone "$repo_slug" "$PRIVATE_PATH" 2>/dev/null; then
+            echo "    Repo slug: $repo_slug"
+            if gh repo clone "$repo_slug" "$PRIVATE_PATH"; then
                 echo -e "${GREEN}✓${NC} Private configuration linked"
                 return 0
             else
-                echo "    gh clone failed, trying fallback..."
+                echo -e "${YELLOW}!${NC} gh clone failed (exit code: $?)"
             fi
+        else
+            echo "    gh CLI not available or not authenticated"
         fi
 
         # Strategy 2: Try git with GIT_ASKPASS (secure token passing)
@@ -630,7 +648,7 @@ setup_private() {
             export GIT_ASKPASS="$askpass_script"
             export GIT_TERMINAL_PROMPT=0
 
-            if git clone "$PRIVATE_REPO" "$PRIVATE_PATH" 2>/dev/null; then
+            if git clone "$PRIVATE_REPO" "$PRIVATE_PATH"; then
                 # Clean up immediately
                 rm -f "$askpass_script"
                 unset GIT_ASKPASS
@@ -643,10 +661,13 @@ setup_private() {
             rm -f "$askpass_script"
             unset GIT_ASKPASS
             unset GIT_TERMINAL_PROMPT
-            echo "    Git clone with token failed, trying plain clone..."
+            echo -e "${YELLOW}!${NC} Git clone with token failed"
+        else
+            echo "    No token available from gh auth"
         fi
 
         # Strategy 3: Fall back to plain git (may prompt for password)
+        echo "    Trying plain git clone..."
         if git clone "$PRIVATE_REPO" "$PRIVATE_PATH"; then
             echo -e "${GREEN}✓${NC} Private configuration linked"
             return 0
