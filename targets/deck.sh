@@ -97,18 +97,30 @@ move_log_to_private() {
 }
 
 push_log_to_git() {
-    if [[ -z "$LOG_FILE" || ! -f "$LOG_FILE" ]]; then
-        return 0
-    fi
-
     local private_dir="$BOOTIBLE_DIR/private"
 
     if [[ ! -d "$private_dir/.git" ]]; then
         return 0
     fi
 
+    # The tee process is still writing to /tmp, so we need to find and copy
+    # the temp log file to private/logs before committing
+    local temp_log
+    temp_log=$(ls -t /tmp/bootible_*.log 2>/dev/null | head -1)
+
+    if [[ -z "$temp_log" || ! -f "$temp_log" ]]; then
+        return 0
+    fi
+
+    local logs_dir="$private_dir/logs/$DEVICE"
+    mkdir -p "$logs_dir"
+
+    # Copy final log content (tee is still appending to temp file)
     local log_filename
-    log_filename=$(basename "$LOG_FILE")
+    log_filename=$(basename "$temp_log" | sed 's/^bootible_//')
+    local final_log="$logs_dir/$log_filename"
+    cp "$temp_log" "$final_log"
+
     local run_type
     if [[ "$DRY_RUN" == "true" ]]; then
         run_type="dry run"
@@ -132,12 +144,16 @@ push_log_to_git() {
     git config user.email 2>/dev/null || git config user.email "bootible@localhost"
 
     # Commit and push
-    if git commit -m "log: $DEVICE $run_type $(date '+%Y-%m-%d %H:%M')" >/dev/null 2>&1; then
-        if git push >/dev/null 2>&1; then
+    echo -e "${BLUE}→${NC} Committing log: logs/$DEVICE/$log_filename"
+    if git commit -m "log: $DEVICE $run_type $(date '+%Y-%m-%d %H:%M')" 2>&1; then
+        echo -e "${BLUE}→${NC} Pushing to remote..."
+        if git push 2>&1; then
             echo -e "${GREEN}✓${NC} Log pushed to private repo"
         else
-            echo -e "${YELLOW}!${NC} Commit saved locally, push failed"
+            echo -e "${YELLOW}!${NC} Commit saved locally, push failed (check git remote)"
         fi
+    else
+        echo -e "${YELLOW}!${NC} Git commit failed"
     fi
 
     cd "$BOOTIBLE_DIR"
