@@ -1,6 +1,14 @@
-# SSH Role - Remote Terminal Access
-# ==================================
-# Enables SSH server for remote access to your Steam Deck.
+# SSH Role - Remote Access & Key Management
+# ==========================================
+# Enables SSH server and manages SSH keys for Steam Deck.
+#
+# Features:
+# - Enable SSH server for remote access
+# - Import authorized keys from private repo
+# - Generate device SSH key
+# - Add key to GitHub via gh CLI
+# - Save key to private repo for backup
+# - Configure git to use SSH for GitHub
 #
 # After this role runs, connect from another computer:
 #   ssh deck@<your-deck-ip>
@@ -9,23 +17,12 @@
 #   Gaming Mode: Settings > Internet > (your connection) > IP Address
 #   Desktop Mode: System Settings > Network > (your connection)
 #   Terminal: ip addr show | grep "inet "
-#
-# Security Recommendations:
-# -------------------------
-# 1. Use a strong sudo password (you set this with `passwd`)
-# 2. Consider SSH keys instead of password auth:
-#    - On your PC: ssh-keygen (if you don't have a key)
-#    - Copy to Deck: ssh-copy-id deck@<deck-ip>
-#    - Then disable password auth in sshd_config
-# 3. If exposing to internet, use Tailscale instead of port forwarding
-#
-# Useful SSH Commands:
-# --------------------
-#   ssh deck@<ip>                    # Connect
-#   scp file.txt deck@<ip>:/home/deck/  # Copy file to Deck
-#   ssh deck@<ip> 'flatpak list'     # Run command remotely
 
 ---
+# =============================================================================
+# SSH SERVER
+# =============================================================================
+
 - name: Enable SSH service
   become: true
   ansible.builtin.systemd:
@@ -57,8 +54,183 @@
     state: restarted
   when: ssh_port_config.changed | default(false)
 
-# SSH survives SteamOS updates but the enabled state might reset.
-# Running this playbook after an update will re-enable it.
+# =============================================================================
+# IMPORT AUTHORIZED KEYS
+# =============================================================================
+
+- name: Ensure .ssh directory exists
+  ansible.builtin.file:
+    path: "{{ deck_home }}/.ssh"
+    state: directory
+    mode: '0700'
+  when: ssh_import_authorized_keys | default(false)
+
+- name: Find authorized keys in private repo
+  ansible.builtin.find:
+    paths:
+      - "{{ playbook_dir }}/../private/steamdeck/ssh-keys"
+      - "{{ playbook_dir }}/../private/steamdeck/files/ssh-keys"
+      - "{{ playbook_dir }}/../private/ssh-keys"
+      - "{{ playbook_dir }}/../private/files/ssh-keys"
+    patterns: "*.pub"
+  register: all_pubkeys
+  when: ssh_import_authorized_keys | default(false)
+
+- name: Build list of keys to import
+  ansible.builtin.set_fact:
+    keys_to_import: >-
+      {{ all_pubkeys.files | default([])
+        | selectattr('path', 'defined')
+        | map(attribute='path')
+        | select('search', '(' + (ssh_authorized_keys | default([]) | join('|')) + ')')
+        | list }}
+  when:
+    - ssh_import_authorized_keys | default(false)
+    - ssh_authorized_keys | default([]) | length > 0
+
+- name: Import all keys if no specific list provided
+  ansible.builtin.set_fact:
+    keys_to_import: "{{ all_pubkeys.files | default([]) | map(attribute='path') | list }}"
+  when:
+    - ssh_import_authorized_keys | default(false)
+    - ssh_authorized_keys | default([]) | length == 0
+
+- name: Read public keys content
+  ansible.builtin.slurp:
+    src: "{{ item }}"
+  register: pubkey_contents
+  loop: "{{ keys_to_import | default([]) }}"
+  when: ssh_import_authorized_keys | default(false)
+
+- name: Write authorized_keys file
+  ansible.builtin.copy:
+    content: |
+      # Managed by bootible - imported from private repo
+      {% for key in pubkey_contents.results | default([]) %}
+      # {{ key.item | basename }}
+      {{ key.content | b64decode }}
+      {% endfor %}
+    dest: "{{ deck_home }}/.ssh/authorized_keys"
+    mode: '0600'
+  when:
+    - ssh_import_authorized_keys | default(false)
+    - pubkey_contents.results | default([]) | length > 0
+
+- name: Display imported keys
+  ansible.builtin.debug:
+    msg: "Imported {{ keys_to_import | default([]) | length }} SSH key(s): {{ keys_to_import | default([]) | map('basename') | join(', ') }}"
+  when:
+    - ssh_import_authorized_keys | default(false)
+    - keys_to_import | default([]) | length > 0
+
+# =============================================================================
+# KEY GENERATION
+# =============================================================================
+
+- name: Set SSH key name
+  ansible.builtin.set_fact:
+    ssh_key_identifier: "{{ ssh_key_name | default(ansible_hostname, true) }}"
+  when: ssh_generate_key | default(false)
+
+- name: Check if SSH key exists
+  ansible.builtin.stat:
+    path: "{{ deck_home }}/.ssh/id_ed25519"
+  register: existing_key
+  when: ssh_generate_key | default(false)
+
+- name: Generate SSH key
+  ansible.builtin.command:
+    cmd: ssh-keygen -t ed25519 -C "{{ ssh_key_identifier }}" -f "{{ deck_home }}/.ssh/id_ed25519" -N ""
+    creates: "{{ deck_home }}/.ssh/id_ed25519"
+  when:
+    - ssh_generate_key | default(false)
+    - not existing_key.stat.exists | default(false)
+
+- name: Read generated public key
+  ansible.builtin.slurp:
+    src: "{{ deck_home }}/.ssh/id_ed25519.pub"
+  register: generated_pubkey
+  when: ssh_generate_key | default(false)
+
+# =============================================================================
+# GITHUB INTEGRATION
+# =============================================================================
+
+- name: Check if gh CLI is available
+  ansible.builtin.command:
+    cmd: which gh
+  register: gh_available
+  failed_when: false
+  changed_when: false
+  when: ssh_add_to_github | default(false) or ssh_configure_git | default(false)
+
+- name: Check gh auth status
+  ansible.builtin.command:
+    cmd: gh auth status
+  register: gh_auth_status
+  failed_when: false
+  changed_when: false
+  when:
+    - gh_available.rc | default(1) == 0
+    - ssh_add_to_github | default(false)
+
+- name: Add SSH key to GitHub
+  ansible.builtin.command:
+    cmd: gh ssh-key add "{{ deck_home }}/.ssh/id_ed25519.pub" --title "{{ ssh_key_identifier }}"
+  when:
+    - ssh_add_to_github | default(false)
+    - ssh_generate_key | default(false)
+    - gh_available.rc | default(1) == 0
+    - gh_auth_status.rc | default(1) == 0
+  register: gh_key_add
+  failed_when: false
+
+- name: Display GitHub key add result
+  ansible.builtin.debug:
+    msg: "{{ 'SSH key added to GitHub' if gh_key_add.rc | default(1) == 0 else 'Could not add key to GitHub (may already exist): ' + (gh_key_add.stderr | default('')) }}"
+  when: ssh_add_to_github | default(false)
+
+- name: Configure git to use SSH for GitHub
+  ansible.builtin.command:
+    cmd: git config --global url."git@github.com:".insteadOf "https://github.com/"
+  when:
+    - ssh_configure_git | default(false)
+    - gh_available.rc | default(1) == 0
+  changed_when: true
+
+# =============================================================================
+# SAVE KEY TO PRIVATE REPO
+# =============================================================================
+
+- name: Ensure private repo ssh-keys directory exists
+  ansible.builtin.file:
+    path: "{{ playbook_dir }}/../private/steamdeck/ssh-keys"
+    state: directory
+    mode: '0755'
+  when:
+    - ssh_save_to_private | default(false)
+    - ssh_generate_key | default(false)
+
+- name: Copy public key to private repo
+  ansible.builtin.copy:
+    src: "{{ deck_home }}/.ssh/id_ed25519.pub"
+    dest: "{{ playbook_dir }}/../private/steamdeck/ssh-keys/{{ ssh_key_identifier }}.pub"
+    mode: '0644'
+    remote_src: true
+  when:
+    - ssh_save_to_private | default(false)
+    - ssh_generate_key | default(false)
+
+- name: Display key saved message
+  ansible.builtin.debug:
+    msg: "SSH public key saved to private/steamdeck/ssh-keys/{{ ssh_key_identifier }}.pub"
+  when:
+    - ssh_save_to_private | default(false)
+    - ssh_generate_key | default(false)
+
+# =============================================================================
+# SUMMARY
+# =============================================================================
 
 - name: Display SSH connection info
   ansible.builtin.debug:
@@ -66,9 +238,19 @@
       SSH is now enabled!
 
       Connect with: ssh deck@<your-deck-ip>{{ ' -p ' + (ssh_port | string) if ssh_port | default(22) != 22 else '' }}
+      {% if ssh_import_authorized_keys | default(false) and keys_to_import | default([]) | length > 0 %}
+      Authentication: SSH keys imported ({{ keys_to_import | length }} key(s))
+      {% else %}
       Password: Your sudo password
+      {% endif %}
       {% if ssh_port | default(22) != 22 %}
       Custom port: {{ ssh_port }}
+      {% endif %}
+      {% if ssh_generate_key | default(false) %}
+
+      Generated key: {{ deck_home }}/.ssh/id_ed25519.pub
+      {% if ssh_add_to_github | default(false) %}  → Added to GitHub{% endif %}
+      {% if ssh_save_to_private | default(false) %}  → Saved to private repo{% endif %}
       {% endif %}
 
       To find your IP:

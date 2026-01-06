@@ -80,6 +80,13 @@
           # SSH
           install_ssh: 'bool'
           ssh_port: 'int'
+          ssh_import_authorized_keys: 'bool'
+          ssh_authorized_keys: 'list'
+          ssh_key_name: 'string'
+          ssh_generate_key: 'bool'
+          ssh_add_to_github: 'bool'
+          ssh_save_to_private: 'bool'
+          ssh_configure_git: 'bool'
 
           # Package managers
           package_managers_flatpak: 'bool'
