@@ -599,17 +599,21 @@ needs_github_auth() {
 
 # Clone bootible
 clone_bootible() {
+    # Public repo - explicitly disable credential helpers to avoid auth issues
+    local git_opts=(-c credential.helper='' -c credential.helper='')
+
     if [[ -d "$BOOTIBLE_DIR/.git" ]]; then
         echo -e "${BLUE}→${NC} Updating existing bootible..."
         cd "$BOOTIBLE_DIR"
         # Ensure we're on main and have latest code (force reset to avoid stale files)
-        git fetch origin main
+        GIT_TERMINAL_PROMPT=0 git "${git_opts[@]}" fetch origin main
         git reset --hard origin/main
         git clean -fd
     else
         echo -e "${BLUE}→${NC} Cloning bootible..."
         rm -rf "$BOOTIBLE_DIR" 2>/dev/null || true
-        git clone https://github.com/gavinmcfall/bootible.git "$BOOTIBLE_DIR"
+        # Clone without any credential helpers (public repo, no auth needed)
+        GIT_TERMINAL_PROMPT=0 git "${git_opts[@]}" clone https://github.com/gavinmcfall/bootible.git "$BOOTIBLE_DIR"
         cd "$BOOTIBLE_DIR"
     fi
     echo -e "${GREEN}✓${NC} Bootible ready at $BOOTIBLE_DIR"
