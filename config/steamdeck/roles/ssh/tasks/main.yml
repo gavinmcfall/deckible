@@ -228,6 +228,7 @@
   when:
     - ssh_save_to_private | default(false)
     - ssh_generate_key | default(false)
+    - pubkey_exists.stat.exists | default(false)
 
 - name: Display key saved message
   ansible.builtin.debug:
