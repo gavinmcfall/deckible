@@ -1095,10 +1095,9 @@ main() {
         echo ""
         echo "Review the output above. When ready to apply changes:"
         echo ""
-        echo -e "  ${GREEN}BOOTIBLE_RUN=1 bootible${NC}"
+        echo -e "  ${GREEN}~/.local/bin/bootible${NC}"
         echo ""
-        echo "Or run the full command:"
-        echo -e "  ${GREEN}BOOTIBLE_RUN=1 curl -fsSL https://bootible.dev/deck | bash${NC}"
+        echo "After this first run, just use: ${GREEN}bootible${NC}"
     else
         echo -e "${GREEN}╔════════════════════════════════════════════════════════════╗${NC}"
         echo -e "${GREEN}║                   Setup Complete!                          ║${NC}"
