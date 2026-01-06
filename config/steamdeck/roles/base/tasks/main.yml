@@ -123,38 +123,59 @@
 
 # SD Card Detection
 # -----------------
-# Steam Deck mounts SD cards at /run/media/mmcblk0p1
+# Steam Deck mounts SD cards at:
+#   /run/media/mmcblk0p1 - unlabeled SD cards
+#   /run/media/deck/<label> - labeled SD cards (e.g., DeckSD)
 # We detect if one is present and set facts for other roles to use.
 
-- name: Check for SD card
+- name: Check for unlabeled SD card
   ansible.builtin.stat:
     path: /run/media/mmcblk0p1
-  register: sdcard_check
+  register: sdcard_unlabeled
+
+- name: Find labeled SD cards
+  ansible.builtin.find:
+    paths: /run/media/deck
+    file_type: directory
+    recurse: false
+  register: sdcard_labeled
+  failed_when: false
+
+- name: Set detected SD card path
+  ansible.builtin.set_fact:
+    detected_sdcard_path: >-
+      {%- if sdcard_unlabeled.stat.exists | default(false) -%}
+        /run/media/mmcblk0p1
+      {%- elif sdcard_labeled.files | default([]) | length > 0 -%}
+        {{ sdcard_labeled.files[0].path }}
+      {%- else -%}
+
+      {%- endif -%}
 
 - name: Check SD card is writable
   ansible.builtin.file:
-    path: /run/media/mmcblk0p1/.deckible_test
+    path: "{{ detected_sdcard_path }}/.bootible_test"
     state: touch
     mode: '0644'
   register: sdcard_write_test
-  when: sdcard_check.stat.exists
+  when: detected_sdcard_path | length > 0
   failed_when: false
   changed_when: false
 
 - name: Clean up SD card test file
   ansible.builtin.file:
-    path: /run/media/mmcblk0p1/.deckible_test
+    path: "{{ detected_sdcard_path }}/.bootible_test"
     state: absent
   when:
-    - sdcard_check.stat.exists
+    - detected_sdcard_path | length > 0
     - sdcard_write_test is succeeded
   changed_when: false
 
 - name: Set SD card facts
   ansible.builtin.set_fact:
-    sdcard_present: "{{ sdcard_check.stat.exists }}"
-    sdcard_writable: "{{ (sdcard_write_test is succeeded) if sdcard_check.stat.exists else false }}"
-    sdcard_path: "{{ '/run/media/mmcblk0p1' if sdcard_check.stat.exists else '' }}"
+    sdcard_present: "{{ detected_sdcard_path | length > 0 }}"
+    sdcard_writable: "{{ (sdcard_write_test is succeeded) if detected_sdcard_path | length > 0 else false }}"
+    sdcard_path: "{{ detected_sdcard_path | trim }}"
 
 - name: Display SD card status
   ansible.builtin.debug:
