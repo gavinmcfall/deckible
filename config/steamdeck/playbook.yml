@@ -435,7 +435,7 @@
           ══════════════════════════════════════════════════════════
           {% endif %}
           System Information:
-            Hostname:    {{ ansible_hostname }}
+            Hostname:    {{ ansible_facts['hostname'] }}
             IP Address:  {{ current_ip.stdout | default('Unknown') }}
             IP Type:     {{ ip_type }}
             MAC Address: {{ mac_address.stdout | default('Unknown') }}
