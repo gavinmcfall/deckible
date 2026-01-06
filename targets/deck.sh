@@ -8,10 +8,14 @@
 #   - ROG Ally X (Windows - redirects to PowerShell)
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/gavinmcfall/bootible/main/targets/deck.sh | bash
+#   # Preview what will happen (dry run - default):
+#   curl -fsSL https://bootible.dev/deck | bash
+#
+#   # Run for real after reviewing:
+#   BOOTIBLE_RUN=1 curl -fsSL https://bootible.dev/deck | bash
 #
 # Or with a private repo:
-#   curl -fsSL https://raw.githubusercontent.com/gavinmcfall/bootible/main/targets/deck.sh | bash -s -- git@github.com:USER/bootible-private.git
+#   curl -fsSL https://bootible.dev/deck | bash -s -- owner/repo
 
 set -e
 
@@ -26,6 +30,9 @@ NC='\033[0m'
 PRIVATE_REPO="${1:-}"
 BOOTIBLE_DIR="$HOME/bootible"
 DEVICE=""
+DRY_RUN="${BOOTIBLE_RUN:-0}"  # Dry run by default unless BOOTIBLE_RUN=1
+[[ "$DRY_RUN" == "1" ]] && DRY_RUN=false || DRY_RUN=true
+LOG_FILE=""
 
 echo -e "${CYAN}"
 echo "╔════════════════════════════════════════════════════════════╗"
@@ -33,6 +40,106 @@ echo "║                      Bootible                              ║"
 echo "║         Universal Gaming Device Configuration              ║"
 echo "╚════════════════════════════════════════════════════════════╝"
 echo -e "${NC}"
+
+# =============================================================================
+# LOGGING
+# =============================================================================
+# Saves session transcript to private/logs/steamdeck/ for debugging
+
+start_logging() {
+    local suffix
+    if [[ "$DRY_RUN" == "true" ]]; then
+        suffix="_dryrun"
+    else
+        suffix="_run"
+    fi
+
+    local hostname
+    hostname=$(hostname | tr '[:upper:]' '[:lower:]')
+    local log_filename
+    log_filename="$(date +%Y-%m-%d_%H%M%S)_${hostname}${suffix}.log"
+
+    # Start in temp, move to private/logs later if available
+    LOG_FILE="/tmp/bootible_${log_filename}"
+
+    # Start logging with script command (tee-style logging)
+    exec > >(tee -a "$LOG_FILE") 2>&1
+
+    echo "=== Bootible Log Started: $(date) ==="
+    echo "Hostname: $hostname"
+    echo "Dry Run: $DRY_RUN"
+    echo "============================================="
+    echo ""
+}
+
+move_log_to_private() {
+    if [[ -z "$LOG_FILE" || ! -f "$LOG_FILE" ]]; then
+        return 0
+    fi
+
+    local logs_dir="$BOOTIBLE_DIR/private/logs/$DEVICE"
+
+    # Only move if private repo exists
+    if [[ -d "$BOOTIBLE_DIR/private/.git" ]]; then
+        mkdir -p "$logs_dir"
+
+        # Get just the filename without bootible_ prefix
+        local log_filename
+        log_filename=$(basename "$LOG_FILE" | sed 's/^bootible_//')
+        local new_path="$logs_dir/$log_filename"
+
+        cp "$LOG_FILE" "$new_path"
+        LOG_FILE="$new_path"
+        echo -e "${GREEN}✓${NC} Log saved: logs/$DEVICE/$log_filename"
+    fi
+}
+
+push_log_to_git() {
+    if [[ -z "$LOG_FILE" || ! -f "$LOG_FILE" ]]; then
+        return 0
+    fi
+
+    local private_dir="$BOOTIBLE_DIR/private"
+
+    if [[ ! -d "$private_dir/.git" ]]; then
+        return 0
+    fi
+
+    local log_filename
+    log_filename=$(basename "$LOG_FILE")
+    local run_type
+    if [[ "$DRY_RUN" == "true" ]]; then
+        run_type="dry run"
+    else
+        run_type="run"
+    fi
+
+    cd "$private_dir"
+
+    # Stage log files
+    git add "logs/$DEVICE/"*.log 2>/dev/null || true
+
+    # Check if there's anything to commit
+    if git diff --cached --quiet 2>/dev/null; then
+        echo -e "${GREEN}✓${NC} Log saved (no changes to push)"
+        return 0
+    fi
+
+    # Set git identity if not configured
+    git config user.name 2>/dev/null || git config user.name "bootible"
+    git config user.email 2>/dev/null || git config user.email "bootible@localhost"
+
+    # Commit and push
+    if git commit -m "log: $DEVICE $run_type $(date '+%Y-%m-%d %H:%M')" >/dev/null 2>&1; then
+        if git push >/dev/null 2>&1; then
+            echo -e "${GREEN}✓${NC} Log pushed to private repo"
+        else
+            echo -e "${YELLOW}!${NC} Commit saved locally, push failed"
+        fi
+    fi
+
+    cd "$BOOTIBLE_DIR"
+}
 
 # Detect device type
 detect_device() {
@@ -495,14 +602,59 @@ setup_private() {
     else
         rm -rf "$PRIVATE_PATH"
         echo "  Cloning private config..."
-        if command -v gh &>/dev/null; then
-            # Extract owner/repo from URL
+
+        # Strategy 1: Try gh CLI first (most reliable with device flow auth)
+        if command -v gh &>/dev/null && gh auth status &>/dev/null 2>&1; then
+            echo "    Using GitHub CLI to clone..."
             local repo_slug
             repo_slug=$(echo "$PRIVATE_REPO" | sed 's|https://github.com/||' | sed 's|\.git$||' | sed 's|git@github.com:||')
-            gh repo clone "$repo_slug" "$PRIVATE_PATH" 2>/dev/null || git clone "$PRIVATE_REPO" "$PRIVATE_PATH"
-        else
-            git clone "$PRIVATE_REPO" "$PRIVATE_PATH"
+            if gh repo clone "$repo_slug" "$PRIVATE_PATH" 2>/dev/null; then
+                echo -e "${GREEN}✓${NC} Private configuration linked"
+                return 0
+            else
+                echo "    gh clone failed, trying fallback..."
+            fi
         fi
+
+        # Strategy 2: Try git with GIT_ASKPASS (secure token passing)
+        local token
+        token=$(gh auth token 2>/dev/null || true)
+        if [[ -n "$token" ]]; then
+            echo "    Cloning with credential helper..."
+            local askpass_script="/tmp/git-askpass-$$.sh"
+            echo "#!/bin/bash" > "$askpass_script"
+            echo "echo '$token'" >> "$askpass_script"
+            chmod +x "$askpass_script"
+
+            # Set up secure git auth
+            export GIT_ASKPASS="$askpass_script"
+            export GIT_TERMINAL_PROMPT=0
+
+            if git clone "$PRIVATE_REPO" "$PRIVATE_PATH" 2>/dev/null; then
+                # Clean up immediately
+                rm -f "$askpass_script"
+                unset GIT_ASKPASS
+                unset GIT_TERMINAL_PROMPT
+                echo -e "${GREEN}✓${NC} Private configuration linked"
+                return 0
+            fi
+
+            # Clean up on failure
+            rm -f "$askpass_script"
+            unset GIT_ASKPASS
+            unset GIT_TERMINAL_PROMPT
+            echo "    Git clone with token failed, trying plain clone..."
+        fi
+
+        # Strategy 3: Fall back to plain git (may prompt for password)
+        if git clone "$PRIVATE_REPO" "$PRIVATE_PATH"; then
+            echo -e "${GREEN}✓${NC} Private configuration linked"
+            return 0
+        fi
+
+        echo -e "${YELLOW}!${NC} Failed to clone private repo"
+        echo "  Continuing without private config..."
+        return 0
     fi
 
     echo -e "${GREEN}✓${NC} Private configuration linked"
@@ -572,10 +724,178 @@ select_config() {
     done
 }
 
+# =============================================================================
+# INSTALLATION SUMMARY
+# =============================================================================
+# Show what was enabled in config for user awareness
+
+show_installation_summary() {
+    local config_file="$SELECTED_CONFIG"
+    [[ -z "$config_file" ]] && config_file="$BOOTIBLE_DIR/config/$DEVICE/config.yml"
+
+    echo ""
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}                    Installation Summary                        ${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+    echo ""
+
+    # Helper to check and display feature
+    show_feature() {
+        local key="$1"
+        local display_name="$2"
+        local note="${3:-}"
+
+        if grep -qE "^${key}:\s*(true|yes)" "$config_file" 2>/dev/null; then
+            if [[ -n "$note" ]]; then
+                echo -e "  ${GREEN}✓${NC} $display_name ${YELLOW}($note)${NC}"
+            else
+                echo -e "  ${GREEN}✓${NC} $display_name"
+            fi
+        fi
+    }
+
+    echo -e "${BLUE}System:${NC}"
+    show_feature "create_snapshot" "Btrfs snapshot created"
+    show_feature "install_ssh" "SSH server enabled"
+    show_feature "install_tailscale" "Tailscale VPN"
+
+    echo ""
+    echo -e "${BLUE}Gaming:${NC}"
+    show_feature "install_decky" "Decky Loader" "restart Steam to see plugins"
+    show_feature "install_proton_ge" "Proton-GE"
+    show_feature "install_emudeck" "EmuDeck" "run wizard in Desktop Mode"
+    show_feature "install_waydroid" "Waydroid Android" "run installer in Desktop Mode"
+
+    echo ""
+    echo -e "${BLUE}Streaming:${NC}"
+    show_feature "install_moonlight" "Moonlight (client)"
+    show_feature "install_sunshine" "Sunshine (server)"
+    show_feature "install_chiaki" "Chiaki (PlayStation Remote)"
+    show_feature "install_greenlight" "Greenlight (Xbox/xCloud)"
+
+    echo ""
+    echo -e "${BLUE}Apps:${NC}"
+    show_feature "install_discord" "Discord"
+    show_feature "install_1password" "1Password"
+    show_feature "install_anydesk" "AnyDesk"
+    show_feature "install_flatseal" "Flatseal"
+
+    # Count enabled Decky plugins
+    local plugin_count
+    plugin_count=$(awk '/^decky_plugins:/,/^[^ ]/' "$config_file" 2>/dev/null | grep -c "enabled: true" || echo 0)
+    if [[ $plugin_count -gt 0 ]]; then
+        echo ""
+        echo -e "${BLUE}Decky Plugins:${NC} $plugin_count enabled"
+    fi
+
+    echo ""
+}
+
+# =============================================================================
+# HEALTH CHECKS
+# =============================================================================
+# Verify key installations after playbook runs
+
+run_health_checks() {
+    echo ""
+    echo -e "${BLUE}→${NC} Running health checks..."
+
+    local checks_passed=0
+    local checks_failed=0
+    local config_file="$SELECTED_CONFIG"
+    [[ -z "$config_file" ]] && config_file="$BOOTIBLE_DIR/config/$DEVICE/config.yml"
+
+    # Helper to check if a feature is enabled in config
+    config_enabled() {
+        local key="$1"
+        grep -qE "^${key}:\s*(true|yes)" "$config_file" 2>/dev/null
+    }
+
+    # Helper to report check result
+    report_check() {
+        local name="$1"
+        local status="$2"
+        if [[ "$status" == "ok" ]]; then
+            echo -e "  ${GREEN}✓${NC} $name"
+            ((checks_passed++))
+        else
+            echo -e "  ${RED}✗${NC} $name"
+            ((checks_failed++))
+        fi
+    }
+
+    # Check Decky Loader if enabled
+    if config_enabled "install_decky"; then
+        if [[ -d "$HOME/homebrew" ]] || [[ -d "$HOME/.local/share/decky" ]]; then
+            report_check "Decky Loader installed" "ok"
+        else
+            report_check "Decky Loader installed" "fail"
+        fi
+    fi
+
+    # Check SSH if enabled
+    if config_enabled "install_ssh"; then
+        if systemctl is-active sshd &>/dev/null; then
+            report_check "SSH service running" "ok"
+        else
+            report_check "SSH service running" "fail"
+        fi
+    fi
+
+    # Check Tailscale if enabled
+    if config_enabled "install_tailscale"; then
+        if command -v tailscale &>/dev/null; then
+            report_check "Tailscale installed" "ok"
+        else
+            report_check "Tailscale installed" "fail"
+        fi
+    fi
+
+    # Check Flatpak apps if enabled
+    if config_enabled "install_flatpak_apps"; then
+        if command -v flatpak &>/dev/null && [[ $(flatpak list 2>/dev/null | wc -l) -gt 0 ]]; then
+            report_check "Flatpak apps available" "ok"
+        else
+            report_check "Flatpak apps available" "fail"
+        fi
+    fi
+
+    # Check EmuDeck if enabled
+    if config_enabled "install_emudeck"; then
+        if [[ -f "$HOME/Applications/EmuDeck.AppImage" ]] || [[ -d "$HOME/Emulation" ]]; then
+            report_check "EmuDeck staged" "ok"
+        else
+            report_check "EmuDeck staged" "fail"
+        fi
+    fi
+
+    # Check Proton-GE if enabled
+    if config_enabled "install_proton_ge"; then
+        local proton_dir="$HOME/.steam/root/compatibilitytools.d"
+        if [[ -d "$proton_dir" ]] && ls "$proton_dir"/GE-Proton* &>/dev/null 2>&1; then
+            report_check "Proton-GE installed" "ok"
+        else
+            report_check "Proton-GE installed" "fail"
+        fi
+    fi
+
+    echo ""
+    if [[ $checks_failed -eq 0 ]]; then
+        echo -e "${GREEN}✓${NC} All health checks passed ($checks_passed/$checks_passed)"
+    else
+        echo -e "${YELLOW}!${NC} Health checks: $checks_passed passed, $checks_failed failed"
+        echo "  Some features may need manual setup or a restart"
+    fi
+}
+
 # Run device-specific playbook
 run_playbook() {
     echo ""
-    echo -e "${BLUE}→${NC} Running $DEVICE configuration..."
+    if [[ "$DRY_RUN" == "true" ]]; then
+        echo -e "${YELLOW}→${NC} Running $DEVICE configuration (DRY RUN)..."
+    else
+        echo -e "${BLUE}→${NC} Running $DEVICE configuration..."
+    fi
     echo ""
 
     cd "$BOOTIBLE_DIR/config/$DEVICE"
@@ -594,13 +914,22 @@ run_playbook() {
         echo -e "${GREEN}✓${NC} GitHub token available for API calls"
     fi
 
+    # Build ansible command with dry run flag if needed
+    local ansible_cmd="ansible-playbook playbook.yml"
+    if [[ "$DRY_RUN" == "true" ]]; then
+        ansible_cmd="$ansible_cmd --check --diff"
+        echo -e "${YELLOW}!${NC} Running in check mode (no changes will be made)"
+        echo ""
+    fi
+
     case $DEVICE in
         steamdeck)
             if [[ -n "$EXTRA_VARS" ]]; then
                 # shellcheck disable=SC2086  # Intentional word splitting for ansible args
-                ansible-playbook playbook.yml $EXTRA_VARS --ask-become-pass < /dev/tty
+                $ansible_cmd $EXTRA_VARS --ask-become-pass < /dev/tty
             else
-                ansible-playbook playbook.yml --ask-become-pass < /dev/tty
+                # shellcheck disable=SC2086  # Intentional word splitting for ansible args
+                $ansible_cmd --ask-become-pass < /dev/tty
             fi
             ;;
         *)
@@ -610,8 +939,36 @@ run_playbook() {
     esac
 }
 
+# Install bootible command wrapper
+install_bootible_command() {
+    echo -e "${BLUE}→${NC} Installing 'bootible' command..."
+
+    local cmd_content="#!/bin/bash
+cd \"$BOOTIBLE_DIR\" && git pull && ./targets/deck.sh \"\$@\""
+
+    local cmd_path="$HOME/.local/bin/bootible"
+    mkdir -p "$HOME/.local/bin"
+
+    echo "$cmd_content" > "$cmd_path"
+    chmod +x "$cmd_path"
+
+    # Ensure ~/.local/bin is in PATH
+    if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+        export PATH="$HOME/.local/bin:$PATH"
+        # shellcheck disable=SC2016  # Intentional: write literal $HOME, not expanded
+        if [[ -f "$HOME/.bashrc" ]] && ! grep -q '$HOME/.local/bin' "$HOME/.bashrc"; then
+            echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
+        fi
+    fi
+
+    echo -e "${GREEN}✓${NC} Installed 'bootible' command"
+}
+
 # Main
 main() {
+    # Start logging early
+    start_logging
+
     detect_device
     echo ""
     check_sudo
@@ -624,6 +981,10 @@ main() {
     echo ""
     setup_private
     echo ""
+
+    # Move log to private repo if available
+    move_log_to_private
+
     select_config
     echo ""
 
@@ -635,26 +996,56 @@ main() {
         echo ""
     fi
 
+    install_bootible_command
+    echo ""
+
     run_playbook
 
+    # Run health checks and show summary (only on real runs, not dry runs)
+    if [[ "$DRY_RUN" != "true" ]]; then
+        run_health_checks
+        show_installation_summary
+    fi
+
     echo ""
-    echo -e "${GREEN}╔════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${GREEN}║                   Setup Complete!                          ║${NC}"
-    echo -e "${GREEN}╚════════════════════════════════════════════════════════════╝${NC}"
+    if [[ "$DRY_RUN" == "true" ]]; then
+        # Show what would be installed in dry run mode
+        show_installation_summary
+
+        echo -e "${YELLOW}╔════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "${YELLOW}║                  DRY RUN COMPLETE                          ║${NC}"
+        echo -e "${YELLOW}╚════════════════════════════════════════════════════════════╝${NC}"
+        echo ""
+        echo "Review the output above. When ready to apply changes:"
+        echo ""
+        echo -e "  ${GREEN}BOOTIBLE_RUN=1 bootible${NC}"
+        echo ""
+        echo "Or run the full command:"
+        echo -e "  ${GREEN}BOOTIBLE_RUN=1 curl -fsSL https://bootible.dev/deck | bash${NC}"
+    else
+        echo -e "${GREEN}╔════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "${GREEN}║                   Setup Complete!                          ║${NC}"
+        echo -e "${GREEN}╚════════════════════════════════════════════════════════════╝${NC}"
+        echo ""
+        echo "Device: $DEVICE"
+        echo ""
+        echo "Next steps:"
+        case $DEVICE in
+            steamdeck)
+                echo "  • Switch to Gaming Mode to see Decky plugins"
+                echo "  • Run EmuDeck wizard if you enabled emulation"
+                echo "  • Check README for post-install configuration"
+                ;;
+        esac
+    fi
+
     echo ""
-    echo "Device: $DEVICE"
+    echo "To re-run anytime:"
+    echo -e "  ${GREEN}bootible${NC}"
     echo ""
-    echo "Next steps:"
-    case $DEVICE in
-        steamdeck)
-            echo "  • Switch to Gaming Mode to see Decky plugins"
-            echo "  • Run EmuDeck wizard if you enabled emulation"
-            echo "  • Check README for post-install configuration"
-            ;;
-    esac
-    echo ""
-    echo "To re-run or update:"
-    echo "  cd ~/bootible && git pull && ./targets/deck.sh"
+
+    # Push log to private repo
+    push_log_to_git
 }
 
 main "$@"
