@@ -61,27 +61,21 @@
 
 ---
 # Install Decky Loader
-- name: Create Decky installer directory
-  ansible.builtin.file:
-    path: "/tmp/decky_install"
-    state: directory
-    mode: '0755'
-
 - name: Download Decky Loader installer
   ansible.builtin.get_url:
     url: https://github.com/SteamDeckHomebrew/decky-installer/releases/latest/download/install_release.sh
-    dest: "/tmp/decky_install/install_decky.sh"
+    dest: "{{ deck_home }}/.cache/install_decky.sh"
     mode: '0755'
 
 - name: Run Decky Loader installer
   ansible.builtin.command:
-    cmd: "/tmp/decky_install/install_decky.sh"
+    cmd: "{{ deck_home }}/.cache/install_decky.sh"
   register: decky_install
   changed_when: "'already installed' not in decky_install.stdout"
 
 - name: Clean up Decky installer
   ansible.builtin.file:
-    path: "/tmp/decky_install"
+    path: "{{ deck_home }}/.cache/install_decky.sh"
     state: absent
 
 # Ensure plugins directory exists
@@ -96,16 +90,16 @@
 # Plugins are downloaded from their GitHub/GitLab releases and
 # extracted to ~/homebrew/plugins/
 
-- name: Create plugin downloads directory
-  ansible.builtin.file:
-    path: "/tmp/decky_plugins"
-    state: directory
-    mode: '0755'
-
 - name: Set plugin_temp path
   ansible.builtin.set_fact:
     plugin_temp:
-      path: "/tmp/decky_plugins"
+      path: "{{ deck_home }}/.cache/decky_plugins"
+
+- name: Create plugin downloads directory
+  ansible.builtin.file:
+    path: "{{ plugin_temp.path }}"
+    state: directory
+    mode: '0755'
 
 # Build list of enabled plugins
 - name: Build enabled plugins list
