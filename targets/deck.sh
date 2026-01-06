@@ -1026,8 +1026,14 @@ cd \"$BOOTIBLE_DIR\" && git pull && BOOTIBLE_RUN=1 ./targets/deck.sh \"\$@\""
     # Install to /usr/local/bin (already in PATH, works immediately)
     local cmd_path="/usr/local/bin/bootible"
 
+    # SteamOS has read-only filesystem - unlock it temporarily
+    sudo steamos-readonly disable 2>/dev/null || true
+
     echo "$cmd_content" | sudo tee "$cmd_path" > /dev/null
     sudo chmod +x "$cmd_path"
+
+    # Re-lock filesystem
+    sudo steamos-readonly enable 2>/dev/null || true
 
     echo -e "${GREEN}✓${NC} Installed 'bootible' command"
 }
