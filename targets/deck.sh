@@ -803,8 +803,8 @@ show_installation_summary() {
 
     # Count enabled Decky plugins
     local plugin_count
-    plugin_count=$(awk '/^decky_plugins:/,/^[^ ]/' "$config_file" 2>/dev/null | grep -c "enabled: true" || echo 0)
-    if [[ $plugin_count -gt 0 ]]; then
+    plugin_count=$(awk '/^decky_plugins:/,/^[^ ]/' "$config_file" 2>/dev/null | grep -c "enabled: true" 2>/dev/null) || plugin_count=0
+    if [[ "$plugin_count" =~ ^[0-9]+$ ]] && [[ $plugin_count -gt 0 ]]; then
         echo ""
         echo -e "${BLUE}Decky Plugins:${NC} $plugin_count enabled"
     fi
