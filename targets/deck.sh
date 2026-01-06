@@ -448,24 +448,64 @@ clone_bootible() {
     echo -e "${GREEN}✓${NC} Bootible ready at $BOOTIBLE_DIR"
 }
 
-# Setup private repo if provided
+# Setup private repo - prompt if not provided
 setup_private() {
-    if [[ -n "$PRIVATE_REPO" ]]; then
-        echo -e "${BLUE}→${NC} Setting up private configuration..."
+    PRIVATE_PATH="$BOOTIBLE_DIR/private"
 
-        PRIVATE_PATH="$BOOTIBLE_DIR/private"
+    # If not provided via argument, prompt interactively
+    if [[ -z "$PRIVATE_REPO" ]]; then
+        echo ""
+        echo -n "Do you have a private config repo? (y/N): "
+        read -r response < /dev/tty
 
-        if [[ -d "$PRIVATE_PATH/.git" ]]; then
-            cd "$PRIVATE_PATH"
-            git pull
-            cd "$BOOTIBLE_DIR"
+        if [[ "$response" =~ ^[Yy]$ ]]; then
+            echo -n "Private repo (e.g., owner/repo): "
+            read -r repo_path < /dev/tty
+
+            if [[ -n "$repo_path" ]]; then
+                PRIVATE_REPO="https://github.com/$repo_path.git"
+            fi
+        fi
+    fi
+
+    # If no private repo, skip
+    if [[ -z "$PRIVATE_REPO" ]]; then
+        return 0
+    fi
+
+    echo -e "${BLUE}→${NC} Setting up private configuration..."
+    echo "  Repo: $PRIVATE_REPO"
+
+    # Authenticate with GitHub if needed
+    if ! gh auth status &>/dev/null 2>&1; then
+        echo ""
+        echo -e "${BLUE}→${NC} GitHub authentication required for private repo"
+        authenticate_github || {
+            echo -e "${YELLOW}!${NC} Skipping private repo (authentication failed)"
+            return 0
+        }
+    fi
+
+    # Clone or update private repo
+    if [[ -d "$PRIVATE_PATH/.git" ]]; then
+        echo "  Updating existing private config..."
+        cd "$PRIVATE_PATH"
+        git pull
+        cd "$BOOTIBLE_DIR"
+    else
+        rm -rf "$PRIVATE_PATH"
+        echo "  Cloning private config..."
+        if command -v gh &>/dev/null; then
+            # Extract owner/repo from URL
+            local repo_slug
+            repo_slug=$(echo "$PRIVATE_REPO" | sed 's|https://github.com/||' | sed 's|\.git$||' | sed 's|git@github.com:||')
+            gh repo clone "$repo_slug" "$PRIVATE_PATH" 2>/dev/null || git clone "$PRIVATE_REPO" "$PRIVATE_PATH"
         else
-            rm -rf "$PRIVATE_PATH"
             git clone "$PRIVATE_REPO" "$PRIVATE_PATH"
         fi
-
-        echo -e "${GREEN}✓${NC} Private configuration linked"
     fi
+
+    echo -e "${GREEN}✓${NC} Private configuration linked"
 }
 
 # Select config file (if multiple exist in private)
