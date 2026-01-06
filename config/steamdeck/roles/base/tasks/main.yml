@@ -12,24 +12,12 @@
 # install applications - they survive updates and are sandboxed.
 
 ---
+# Verify sudo works with the provided become password
 - name: Verify sudo is working
-  ansible.builtin.command: sudo -n true
+  ansible.builtin.command: whoami
+  become: true
   register: sudo_check
   changed_when: false
-  failed_when: false
-
-- name: Fail if sudo requires password and none provided
-  ansible.builtin.fail:
-    msg: |
-      Sudo password required. Run the playbook with --ask-become-pass:
-        ansible-playbook playbook.yml --ask-become-pass
-
-      If you haven't set a sudo password yet:
-        1. Open Konsole in Desktop Mode
-        2. Run: passwd
-        3. Set your password
-        4. Run this playbook again
-  when: sudo_check.rc != 0
 
 # Hostname Configuration
 # ----------------------
