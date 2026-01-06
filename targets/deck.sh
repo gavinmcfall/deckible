@@ -998,6 +998,9 @@ run_playbook() {
         echo ""
     fi
 
+    # Refresh sudo credentials before running ansible
+    sudo -v < /dev/tty
+
     case $DEVICE in
         steamdeck)
             if [[ -n "$EXTRA_VARS" ]]; then
