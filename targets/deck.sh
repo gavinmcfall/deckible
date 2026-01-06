@@ -597,35 +597,35 @@ needs_github_auth() {
     return 1  # No need
 }
 
+# Clear stale git/gh credentials that might be causing issues
+clear_git_credentials() {
+    echo -e "${YELLOW}!${NC} Clearing stale credentials..."
+    # Clear gh auth
+    gh auth logout --hostname github.com 2>/dev/null || true
+    # Clear git credential helpers
+    git config --global --unset-all credential.helper 2>/dev/null || true
+    # Clear any URL rewriting
+    git config --global --unset-all 'url.git@github.com:.insteadOf' 2>/dev/null || true
+    git config --global --unset-all 'url.ssh://git@github.com/.insteadOf' 2>/dev/null || true
+}
+
 # Clone bootible
 clone_bootible() {
-    # Public repo - ignore global git config to avoid SSH rewrites
-    # Some users have git configured to rewrite HTTPS to SSH, which fails without keys
-    # GIT_CONFIG_GLOBAL=/dev/null ignores ~/.gitconfig entirely for this clone
-    export GIT_CONFIG_GLOBAL=/dev/null
-    export GIT_CONFIG_SYSTEM=/dev/null
-    export GIT_TERMINAL_PROMPT=0
-
     if [[ -d "$BOOTIBLE_DIR/.git" ]]; then
         echo -e "${BLUE}→${NC} Updating existing bootible..."
         cd "$BOOTIBLE_DIR"
-        # Ensure we're on main and have latest code (force reset to avoid stale files)
-        git fetch origin main
-        git reset --hard origin/main
-        git clean -fd
+        git fetch origin main && git reset --hard origin/main && git clean -fd
     else
         echo -e "${BLUE}→${NC} Cloning bootible..."
         rm -rf "$BOOTIBLE_DIR" 2>/dev/null || true
-        # Clone public repo (no auth needed, no config interference)
-        git clone https://github.com/gavinmcfall/bootible.git "$BOOTIBLE_DIR"
+        # Simple clone - public repo, should just work
+        if ! git clone https://github.com/gavinmcfall/bootible.git "$BOOTIBLE_DIR"; then
+            # If clone fails, credentials are probably broken - clear and retry
+            clear_git_credentials
+            git clone https://github.com/gavinmcfall/bootible.git "$BOOTIBLE_DIR"
+        fi
         cd "$BOOTIBLE_DIR"
     fi
-
-    # Restore normal git config for rest of script
-    unset GIT_CONFIG_GLOBAL
-    unset GIT_CONFIG_SYSTEM
-    unset GIT_TERMINAL_PROMPT
-
     echo -e "${GREEN}✓${NC} Bootible ready at $BOOTIBLE_DIR"
 }
 
@@ -690,59 +690,33 @@ setup_private() {
         rm -rf "$PRIVATE_PATH"
         echo "  Cloning private config..."
 
-        # Strategy 1: Try gh CLI first (most reliable with device flow auth)
-        if command -v gh &>/dev/null && gh auth status &>/dev/null 2>&1; then
-            echo "    Using GitHub CLI to clone..."
-            local repo_slug
-            repo_slug=$(echo "$PRIVATE_REPO" | sed 's|https://github.com/||' | sed 's|\.git$||' | sed 's|git@github.com:||')
-            echo "    Repo slug: $repo_slug"
-            # Force HTTPS protocol (gh might default to SSH which fails without keys)
-            gh config set git_protocol https 2>/dev/null || true
-            if gh repo clone "$repo_slug" "$PRIVATE_PATH"; then
-                echo -e "${GREEN}✓${NC} Private configuration linked"
-                return 0
-            else
-                echo -e "${YELLOW}!${NC} gh clone failed (exit code: $?)"
-            fi
-        else
-            echo "    gh CLI not available or not authenticated"
-        fi
+        # Get repo slug for gh clone
+        local repo_slug
+        repo_slug=$(echo "$PRIVATE_REPO" | sed 's|https://github.com/||' | sed 's|\.git$||' | sed 's|git@github.com:||')
 
-        # Strategy 2: Try git with token (ignore global config to prevent SSH rewrite)
-        local token
-        token=$(gh auth token 2>/dev/null || true)
-        if [[ -n "$token" ]]; then
-            echo "    Cloning with token..."
-            # Ignore global git config to prevent SSH URL rewriting
-            export GIT_CONFIG_GLOBAL=/dev/null
-            export GIT_CONFIG_SYSTEM=/dev/null
-            export GIT_TERMINAL_PROMPT=0
-
-            # Clone with token in URL (works even with restrictive git configs)
-            local auth_url
-            auth_url=$(echo "$PRIVATE_REPO" | sed "s|https://|https://${token}@|")
-            if git clone "$auth_url" "$PRIVATE_PATH"; then
-                unset GIT_CONFIG_GLOBAL GIT_CONFIG_SYSTEM GIT_TERMINAL_PROMPT
-                echo -e "${GREEN}✓${NC} Private configuration linked"
-                return 0
-            fi
-
-            unset GIT_CONFIG_GLOBAL GIT_CONFIG_SYSTEM GIT_TERMINAL_PROMPT
-            echo -e "${YELLOW}!${NC} Git clone with token failed"
-        else
-            echo "    No token available from gh auth"
-        fi
-
-        # Strategy 3: Fall back to plain git (ignore global config)
-        echo "    Trying plain git clone..."
-        export GIT_CONFIG_GLOBAL=/dev/null
-        export GIT_CONFIG_SYSTEM=/dev/null
-        if git clone "$PRIVATE_REPO" "$PRIVATE_PATH"; then
-            unset GIT_CONFIG_GLOBAL GIT_CONFIG_SYSTEM
+        # Try gh repo clone (uses authenticated HTTPS)
+        gh config set git_protocol https 2>/dev/null || true
+        if gh repo clone "$repo_slug" "$PRIVATE_PATH" 2>/dev/null; then
             echo -e "${GREEN}✓${NC} Private configuration linked"
             return 0
         fi
-        unset GIT_CONFIG_GLOBAL GIT_CONFIG_SYSTEM
+
+        # Clone failed - clear credentials and re-authenticate
+        echo -e "${YELLOW}!${NC} Clone failed, refreshing authentication..."
+        clear_git_credentials
+
+        # Re-authenticate
+        if ! authenticate_github; then
+            echo -e "${YELLOW}!${NC} Authentication failed, continuing without private config"
+            return 0
+        fi
+
+        # Retry clone with fresh auth
+        gh config set git_protocol https 2>/dev/null || true
+        if gh repo clone "$repo_slug" "$PRIVATE_PATH"; then
+            echo -e "${GREEN}✓${NC} Private configuration linked"
+            return 0
+        fi
 
         echo -e "${YELLOW}!${NC} Failed to clone private repo"
         echo "  Continuing without private config..."
