@@ -599,8 +599,13 @@ needs_github_auth() {
 
 # Clone bootible
 clone_bootible() {
-    # Public repo - explicitly disable credential helpers to avoid auth issues
-    local git_opts=(-c credential.helper='' -c credential.helper='')
+    # Public repo - force HTTPS (disable SSH rewrites and credential helpers)
+    # Some users have git configured to rewrite HTTPS to SSH, which fails without keys
+    local git_opts=(
+        -c credential.helper=''
+        -c 'url.https://github.com/.insteadOf=git@github.com:'
+        -c 'url.https://github.com/.insteadOf=ssh://git@github.com/'
+    )
 
     if [[ -d "$BOOTIBLE_DIR/.git" ]]; then
         echo -e "${BLUE}→${NC} Updating existing bootible..."
