@@ -627,7 +627,7 @@ setup_private() {
             read -r github_user < /dev/tty
             GITHUB_USER="$github_user"
 
-            echo -n "Private repo name (e.g., ${github_user:-owner}/repo): " > /dev/tty
+            echo -n "Private repo (e.g., owner/repo): " > /dev/tty
             read -r repo_path < /dev/tty
 
             if [[ -n "$repo_path" ]]; then
