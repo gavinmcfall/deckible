@@ -153,7 +153,11 @@ install_ansible() {
     # Try pip first (survives SteamOS updates)
     if command -v pip &> /dev/null || command -v pip3 &> /dev/null; then
         echo "  Using pip (recommended - survives updates)..."
-        pip3 install --user ansible || pip install --user ansible
+        # --break-system-packages needed for PEP 668 (externally-managed-environment)
+        pip3 install --user --break-system-packages ansible 2>/dev/null || \
+        pip3 install --user ansible 2>/dev/null || \
+        pip install --user --break-system-packages ansible 2>/dev/null || \
+        pip install --user ansible
         export PATH="$HOME/.local/bin:$PATH"
         if command -v ansible-playbook &> /dev/null; then
             echo -e "${GREEN}✓${NC} Ansible installed via pip"
