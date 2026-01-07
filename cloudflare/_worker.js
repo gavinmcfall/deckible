@@ -19,12 +19,12 @@ const ROUTES = {
   '/rog': {
     path: '/targets/ally.ps1',
     description: 'ROG Ally (Windows)',
-    sha256: 'b5f27154086c7289dfd376b1127b85b96071299d4bc34e7a2affc99c7667f366',
+    sha256: '4d4fb8a32547c55ba691322d5f1017d7fec6367c255fa512961dfd9e1f501c92',
   },
   '/deck': {
     path: '/targets/deck.sh',
     description: 'Steam Deck (SteamOS)',
-    sha256: '4018e3021b2ba58bf394285eee8880e2ffa9f1e608d167786cf368187b0d722b',
+    sha256: '0af3cd6aaaa43c3219beb5c938036afd5cfd3eabbfa8b71f9f3d3b2b1c98f65f',
   },
 };
 
