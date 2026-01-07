@@ -70,6 +70,7 @@
 - name: Run Decky Loader installer
   ansible.builtin.command:
     cmd: "{{ deck_home }}/.cache/install_decky.sh"
+  become: true  # Installer needs root (calls sudo internally)
   register: decky_install
   changed_when: "'already installed' not in decky_install.stdout"
 
