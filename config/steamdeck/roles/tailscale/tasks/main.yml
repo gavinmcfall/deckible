@@ -69,12 +69,20 @@
   register: tailscale_install_result
   changed_when: tailscale_install_result.rc == 0
 
+- name: Check if Tailscale service exists (for check mode)
+  ansible.builtin.command:
+    cmd: systemctl list-unit-files tailscaled.service
+  register: tailscaled_service
+  changed_when: false
+  failed_when: false
+
 - name: Enable and start Tailscale service
   ansible.builtin.systemd:
     name: tailscaled
     enabled: true
     state: started
   become: true
+  when: "'tailscaled.service' in tailscaled_service.stdout"
 
 - name: Clean up installer
   ansible.builtin.file:
