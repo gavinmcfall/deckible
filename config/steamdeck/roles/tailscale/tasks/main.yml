@@ -41,13 +41,45 @@
 # - Check if daemon is running: `systemctl status tailscaled`
 
 ---
-# The Flatpak version is recommended because it survives SteamOS updates.
-# Limitation: May not auto-start as reliably as the pacman version.
-# Make sure Tailscale is connected before leaving home!
-- name: Install Tailscale via Flatpak
-  community.general.flatpak:
-    name: com.tailscale.IPNQt
-    state: present
+# Install Tailscale using official static binaries (survives SteamOS updates)
+# Note: There's no official Tailscale Flatpak on Flathub
+
+- name: Check if Tailscale is already installed
+  ansible.builtin.stat:
+    path: /usr/local/bin/tailscale
+  register: tailscale_installed
+
+- name: Download Tailscale installer
+  ansible.builtin.get_url:
+    url: https://tailscale.com/install.sh
+    dest: /tmp/tailscale-install.sh
+    mode: '0755'
+  when: not tailscale_installed.stat.exists
+
+- name: Install Tailscale
+  ansible.builtin.shell: |
+    # Temporarily disable read-only filesystem
+    sudo steamos-readonly disable 2>/dev/null || true
+    # Install Tailscale
+    /tmp/tailscale-install.sh
+    # Re-enable read-only filesystem
+    sudo steamos-readonly enable 2>/dev/null || true
+  become: true
+  when: not tailscale_installed.stat.exists
+  register: tailscale_install_result
+  changed_when: tailscale_install_result.rc == 0
+
+- name: Enable and start Tailscale service
+  ansible.builtin.systemd:
+    name: tailscaled
+    enabled: true
+    state: started
+  become: true
+
+- name: Clean up installer
+  ansible.builtin.file:
+    path: /tmp/tailscale-install.sh
+    state: absent
 
 - name: Display Tailscale setup instructions
   ansible.builtin.debug:

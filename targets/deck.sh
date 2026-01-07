@@ -448,7 +448,7 @@ show_device_code() {
 authenticate_github() {
     # GitHub CLI's OAuth client_id (public, used by gh CLI)
     local client_id="178c6fc778ccc68e1d6a"
-    local scope="repo,read:org"
+    local scope="repo,read:org,admin:public_key"
 
     echo -e "${BLUE}→${NC} Setting up GitHub authentication..."
 
