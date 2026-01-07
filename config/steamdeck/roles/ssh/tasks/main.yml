@@ -68,10 +68,7 @@
 - name: Find authorized keys in private repo
   ansible.builtin.find:
     paths:
-      - "{{ playbook_dir }}/../private/steamdeck/ssh-keys"
-      - "{{ playbook_dir }}/../private/steamdeck/files/ssh-keys"
       - "{{ playbook_dir }}/../private/ssh-keys"
-      - "{{ playbook_dir }}/../private/files/ssh-keys"
     patterns: "*.pub"
   register: all_pubkeys
   when: ssh_import_authorized_keys | default(false)
@@ -224,7 +221,7 @@
 
 - name: Ensure private repo ssh-keys directory exists
   ansible.builtin.file:
-    path: "{{ playbook_dir }}/../private/steamdeck/ssh-keys"
+    path: "{{ playbook_dir }}/../private/ssh-keys"
     state: directory
     mode: '0755'
   when:
@@ -234,7 +231,7 @@
 
 - name: Check if ssh-keys directory exists (for check mode)
   ansible.builtin.stat:
-    path: "{{ playbook_dir }}/../private/steamdeck/ssh-keys"
+    path: "{{ playbook_dir }}/../private/ssh-keys"
   register: ssh_keys_dir_stat
   when:
     - ssh_save_to_private | default(false)
@@ -243,7 +240,7 @@
 - name: Copy public key to private repo
   ansible.builtin.copy:
     src: "{{ deck_home }}/.ssh/id_ed25519.pub"
-    dest: "{{ playbook_dir }}/../private/steamdeck/ssh-keys/{{ ssh_key_identifier }}.pub"
+    dest: "{{ playbook_dir }}/../private/ssh-keys/{{ ssh_key_identifier }}.pub"
     mode: '0644'
     remote_src: true
   when:
@@ -254,7 +251,7 @@
 
 - name: Display key saved message
   ansible.builtin.debug:
-    msg: "SSH public key saved to private/steamdeck/ssh-keys/{{ ssh_key_identifier }}.pub"
+    msg: "SSH public key saved to private/ssh-keys/{{ ssh_key_identifier }}.pub"
   when:
     - ssh_save_to_private | default(false)
     - ssh_generate_key | default(false)

@@ -718,7 +718,8 @@ function Setup-Private {
 
 function Select-Config {
     $script:SelectedConfig = ""
-    $privateDeviceDir = Join-Path $BootibleDir "private\$Device"
+    $script:SelectedInstance = ""
+    $privateDeviceDir = Join-Path $BootibleDir "private\device\$Device"
     $defaultConfig = Join-Path $BootibleDir "config\$Device\config.yml"
 
     # Check if private device config directory exists
@@ -728,48 +729,50 @@ function Select-Config {
         return
     }
 
-    # Find config files in private directory
-    $configFiles = Get-ChildItem -Path $privateDeviceDir -Filter "config*.yml" -File -ErrorAction SilentlyContinue | Sort-Object Name
+    # Find device instance directories (each subdirectory is a device instance)
+    $deviceInstances = Get-ChildItem -Path $privateDeviceDir -Directory -ErrorAction SilentlyContinue | Sort-Object Name
 
-    # If no private configs, use default
-    if (-not $configFiles -or $configFiles.Count -eq 0) {
+    # If no device instances, use default
+    if (-not $deviceInstances -or $deviceInstances.Count -eq 0) {
         Write-Status "Using default configuration" "Info"
         $script:SelectedConfig = $defaultConfig
         return
     }
 
-    # If only one config, use it automatically
-    if ($configFiles.Count -eq 1) {
-        $script:SelectedConfig = $configFiles[0].FullName
-        Write-Status "Using config: $($configFiles[0].Name)" "Success"
+    # If only one instance, use it automatically
+    if ($deviceInstances.Count -eq 1) {
+        $script:SelectedInstance = $deviceInstances[0].Name
+        $script:SelectedConfig = Join-Path $deviceInstances[0].FullName "config.yml"
+        Write-Status "Using config: $($deviceInstances[0].Name)" "Success"
         return
     }
 
-    # Multiple configs - let user choose
+    # Multiple instances - let user choose
     Write-Host ""
     Write-Host "Multiple configurations found:" -ForegroundColor Cyan
     Write-Host ""
-    for ($i = 0; $i -lt $configFiles.Count; $i++) {
+    for ($i = 0; $i -lt $deviceInstances.Count; $i++) {
         $num = $i + 1
         Write-Host "  " -NoNewline
         Write-Host "$num" -ForegroundColor Yellow -NoNewline
-        Write-Host ") $($configFiles[$i].Name)"
+        Write-Host ") $($deviceInstances[$i].Name)"
     }
     Write-Host ""
 
     while ($true) {
-        $selection = Read-Host "Select configuration [1-$($configFiles.Count)]"
+        $selection = Read-Host "Select configuration [1-$($deviceInstances.Count)]"
 
         if ($selection -match '^\d+$') {
             $idx = [int]$selection - 1
-            if ($idx -ge 0 -and $idx -lt $configFiles.Count) {
-                $script:SelectedConfig = $configFiles[$idx].FullName
+            if ($idx -ge 0 -and $idx -lt $deviceInstances.Count) {
+                $script:SelectedInstance = $deviceInstances[$idx].Name
+                $script:SelectedConfig = Join-Path $deviceInstances[$idx].FullName "config.yml"
                 Write-Host ""
-                Write-Status "Selected: $($configFiles[$idx].Name)" "Success"
+                Write-Status "Selected: $($deviceInstances[$idx].Name)" "Success"
                 return
             }
         }
-        Write-Host "Invalid selection. Please enter a number between 1 and $($configFiles.Count)" -ForegroundColor Red
+        Write-Host "Invalid selection. Please enter a number between 1 and $($deviceInstances.Count)" -ForegroundColor Red
     }
 }
 
@@ -852,21 +855,12 @@ function Main {
     # Detect device type first (needed for log path)
     Detect-Device
 
-    # Start transcript - save to private logs if available, otherwise temp
-    $privatePath = Join-Path $BootibleDir "private"
+    # Start transcript - always start in TEMP since we don't know the instance yet
+    # Will be moved to device instance Logs folder after Select-Config
     $suffix = if ($DryRun) { "_dryrun" } else { "_run" }
     $hostname = $env:COMPUTERNAME.ToLower()
     $logFileName = "$(Get-Date -Format 'yyyy-MM-dd_HHmmss')_${hostname}$suffix.log"
-
-    if (Test-Path $privatePath) {
-        $logsPath = Join-Path $privatePath "logs\$Device"
-        if (-not (Test-Path $logsPath)) {
-            New-Item -ItemType Directory -Path $logsPath -Force | Out-Null
-        }
-        $Script:TranscriptFile = Join-Path $logsPath $logFileName
-    } else {
-        $Script:TranscriptFile = Join-Path $env:TEMP "bootible_$logFileName"
-    }
+    $Script:TranscriptFile = Join-Path $env:TEMP "bootible_$logFileName"
 
     # Set env var so Run.ps1 knows transcript is already running
     $env:BOOTIBLE_TRANSCRIPT = $Script:TranscriptFile
@@ -928,11 +922,14 @@ function Main {
     Setup-Private
     Write-Host ""
 
-    # Move transcript from TEMP to logs folder if it was started there
+    Select-Config
+    Write-Host ""
+
+    # Move transcript from TEMP to device instance Logs folder now that we know the instance
     $privatePath = Join-Path $BootibleDir "private"
-    if ((Test-Path $privatePath) -and $Script:TranscriptFile -and ($Script:TranscriptFile -like "$env:TEMP*")) {
-        # Transcript is in TEMP, move it to logs folder
-        $logsPath = Join-Path $privatePath "logs\$Device"
+    if ($script:SelectedInstance -and (Test-Path $privatePath) -and $Script:TranscriptFile -and ($Script:TranscriptFile -like "$env:TEMP*")) {
+        # Transcript is in TEMP, move it to device instance Logs folder
+        $logsPath = Join-Path $privatePath "device\$Device\$($script:SelectedInstance)\Logs"
         if (-not (Test-Path $logsPath)) {
             New-Item -ItemType Directory -Path $logsPath -Force | Out-Null
         }
@@ -956,9 +953,6 @@ function Main {
             } catch { }
         }
     }
-
-    Select-Config
-    Write-Host ""
 
     Install-BootibleCommand
     Write-Host ""
@@ -1020,14 +1014,23 @@ function Main {
                 $ErrorActionPreference = "Continue"
                 try {
                     $runType = if ($DryRun) { "dry run" } else { "run" }
-                    $logRelPath = "logs/$Device/$logFileName"
+
+                    # Build log path based on whether we have a selected instance
+                    if ($script:SelectedInstance) {
+                        $logRelPath = "device/$Device/$($script:SelectedInstance)/Logs/$logFileName"
+                        $logGlobPath = "device/$Device/$($script:SelectedInstance)/Logs/*.log"
+                    } else {
+                        # Fallback if no instance selected (shouldn't happen normally)
+                        $logRelPath = "device/$Device"
+                        $logGlobPath = "device/$Device/**/*.log"
+                    }
 
                     # Verify log file exists before attempting git operations
                     if (-not (Test-Path $logRelPath)) {
                         Write-Host "[!] Log file not found: $logRelPath" -ForegroundColor Yellow
                     } else {
                         # Stage all log files (including any from failed previous runs)
-                        & git add "logs/$Device/*.log" 2>$null
+                        & git add $logGlobPath 2>$null
 
                         # Check if there's anything to commit
                         $stagedFiles = & git diff --cached --name-only 2>$null
@@ -1043,7 +1046,8 @@ function Main {
                             }
 
                             # Commit with output captured to verify success
-                            $commitOutput = & git commit -m "log: $Device $runType $(Get-Date -Format 'yyyy-MM-dd HH:mm')" 2>&1
+                            $instanceName = if ($script:SelectedInstance) { $script:SelectedInstance } else { $Device }
+                            $commitOutput = & git commit -m "log: $instanceName $runType $(Get-Date -Format 'yyyy-MM-dd HH:mm')" 2>&1
 
                             # Verify commit actually happened by checking if files are still staged
                             $stillStaged = & git diff --cached --name-only 2>$null

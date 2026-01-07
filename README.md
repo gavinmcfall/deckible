@@ -174,7 +174,7 @@ See [Architecture](docs/architecture.md) for bootstrap flow, config merge, and m
 ### Example: Enable common apps
 
 ```yaml
-# private/rog-ally/config.yml
+# private/device/rog-ally/MyAlly/config.yml
 install_discord: true
 install_spotify: true
 install_vlc: true
@@ -200,7 +200,7 @@ bios_path: "D:\\Emulation\\BIOS"
 ### Example: Steam Deck with Decky plugins
 
 ```yaml
-# private/steamdeck/config.yml
+# private/device/steamdeck/MyDeck/config.yml
 install_decky_loader: true
 decky_plugins:
   - css_loader

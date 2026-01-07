@@ -337,12 +337,12 @@
 # ============================================================================
 # Local Flatpak Files
 # ============================================================================
-# Install any .flatpak files placed in private/steamdeck/files/flatpaks/ or files/steamdeck/flatpaks/
+# Install any .flatpak files placed in private/flatpaks/ or files/steamdeck/flatpaks/
 # Useful for Patreon versions or builds not on Flathub.
 
 - name: Find flatpak files in private overlay
   ansible.builtin.find:
-    paths: "{{ private_files_path | default(playbook_dir + '/../private/steamdeck/files') }}/flatpaks"
+    paths: "{{ playbook_dir }}/../private/flatpaks"
     patterns: "*.flatpak"
   register: private_flatpaks
   delegate_to: localhost

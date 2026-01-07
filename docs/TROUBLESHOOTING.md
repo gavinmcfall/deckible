@@ -331,15 +331,12 @@ ansible-playbook playbook.yml --tags "base,decky" --ask-become-pass
 ### Log locations
 
 **ROG Ally (Windows)**:
-- With private repo: `~/bootible/private/logs/rog-ally/`
+- With private repo: `~/bootible/private/device/rog-ally/<YourDevice>/Logs/`
 - Without private repo: `%TEMP%/bootible_*.log`
 
 **Steam Deck (SteamOS)**:
-- Ansible doesn't create persistent logs by default
-- Run with output redirection:
-  ```bash
-  ansible-playbook playbook.yml --ask-become-pass 2>&1 | tee ~/bootible-run.log
-  ```
+- With private repo: `~/bootible/private/device/steamdeck/<YourDevice>/Logs/`
+- Without private repo: `/tmp/bootible_*.log`
 
 ### Restoring from backup
 
@@ -372,8 +369,8 @@ Yes. Bootible is idempotent - running it again will:
 ### How do I update my configuration?
 
 1. Edit your private config file:
-   - Windows: `bootible/private/rog-ally/config.yml`
-   - Steam Deck: `bootible/private/steamdeck/config.yml`
+   - Windows: `bootible/private/device/rog-ally/<YourDevice>/config.yml`
+   - Steam Deck: `bootible/private/device/steamdeck/<YourDevice>/config.yml`
 2. Re-run bootible to apply changes
 
 ### How do I add new packages?

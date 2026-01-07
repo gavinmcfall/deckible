@@ -2,7 +2,7 @@
 # ====================================
 # Default settings for ROG Ally X setup.
 #
-# To customize: Create private/rog-ally/config.yml and override these values.
+# To customize: Create private/device/rog-ally/<YourDeviceName>/config.yml and override these values.
 # See README.md for details.
 
 ---
@@ -176,7 +176,7 @@ ssh_configure_git: true       # Configure git to use SSH for GitHub
 install_emulation: false
 
 # EmuDeck - All-in-one emulation setup (recommended)
-# Uses EA/Patreon version if found in private/rog-ally/scripts/
+# Uses EA/Patreon version if found in private/scripts/
 install_emudeck: false
 
 # Frontends

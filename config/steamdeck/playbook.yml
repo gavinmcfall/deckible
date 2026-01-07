@@ -8,8 +8,9 @@
 #
 # Configuration:
 #   - Defaults: config.yml
-#   - Your settings: ../private/steamdeck/config.yml (overrides defaults)
-#   - Private files: ../private/steamdeck/files/ (Patreon downloads, etc.)
+#   - Your settings: ../private/device/steamdeck/<instance>/config.yml
+#   - Shared scripts: ../private/scripts/ (EmuDeck EA, etc.)
+#   - Device images: ../private/device/steamdeck/<instance>/Images/
 #
 # See README.md for full documentation.
 
@@ -45,22 +46,25 @@
       when: local_config.stat.exists
       tags: always
 
-    - name: Check for private configuration
+    # Private configuration is passed via -e @path/to/config.yml from deck.sh
+    # The device_instance variable is also passed when using the bootstrap script
+    - name: Check for private configuration (device instance)
       ansible.builtin.stat:
-        path: "{{ playbook_dir }}/../private/steamdeck/config.yml"
+        path: "{{ playbook_dir }}/../private/device/steamdeck/{{ device_instance | default('') }}/config.yml"
       register: private_config
+      when: device_instance is defined
       tags: always
 
-    - name: Load private configuration
+    - name: Load private configuration (device instance)
       ansible.builtin.include_vars:
-        file: "{{ playbook_dir }}/../private/steamdeck/config.yml"
-      when: private_config.stat.exists
+        file: "{{ playbook_dir }}/../private/device/steamdeck/{{ device_instance }}/config.yml"
+      when: device_instance is defined and private_config.stat.exists | default(false)
       tags: always
 
     - name: Note configuration source
       ansible.builtin.debug:
         msg: >-
-          {% if private_config.stat.exists %}Using private config (private/steamdeck/config.yml)
+          {% if device_instance is defined %}Using device instance: {{ device_instance }}
           {% elif local_config.stat.exists %}Using local config (~/.config/bootible/steamdeck/config.yml)
           {% else %}Using default config.yml{% endif %}
       tags: always
@@ -240,12 +244,15 @@
         success_msg: "Configuration schema valid"
       tags: always
 
-    # Set private files path for roles to use
-    - name: Set private files path
+    # Set private files paths for roles to use
+    # New structure: shared scripts in private/scripts/, device images in device/<platform>/<instance>/Images/
+    - name: Set private files paths
       ansible.builtin.set_fact:
-        private_files_path: "{{ playbook_dir }}/../private/steamdeck/files"
+        private_scripts_path: "{{ playbook_dir }}/../private/scripts"
+        private_instance_path: "{{ playbook_dir }}/../private/device/steamdeck/{{ device_instance | default('') }}"
         local_files_path: "{{ playbook_dir }}/../files/steamdeck"
-        has_private_files: "{{ (playbook_dir + '/../private/steamdeck/files') is directory }}"
+        has_private_scripts: "{{ (playbook_dir + '/../private/scripts') is directory }}"
+        has_private_instance: "{{ device_instance is defined and (playbook_dir + '/../private/device/steamdeck/' + device_instance) is directory }}"
       tags: always
 
     # Create btrfs snapshot before making changes

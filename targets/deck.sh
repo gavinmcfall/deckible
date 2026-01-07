@@ -58,7 +58,7 @@ echo -e "${NC}"
 # =============================================================================
 # LOGGING
 # =============================================================================
-# Saves session transcript to private/logs/steamdeck/ for debugging
+# Saves session transcript to private/device/<platform>/<instance>/Logs/ for debugging
 
 start_logging() {
     local suffix
@@ -93,21 +93,22 @@ move_log_to_private() {
         return 0
     fi
 
-    local logs_dir="$BOOTIBLE_DIR/private/logs/$DEVICE"
-
-    # Only move if private repo exists
-    if [[ -d "$BOOTIBLE_DIR/private/.git" ]]; then
-        mkdir -p "$logs_dir"
-
-        # Get just the filename without bootible_ prefix
-        local log_filename
-        log_filename=$(basename "$LOG_FILE" | sed 's/^bootible_//')
-        local new_path="$logs_dir/$log_filename"
-
-        cp "$LOG_FILE" "$new_path"
-        LOG_FILE="$new_path"
-        echo -e "${GREEN}✓${NC} Log saved: logs/$DEVICE/$log_filename"
+    # Only move if we know the instance and private repo exists
+    if [[ -z "$SELECTED_INSTANCE" || ! -d "$BOOTIBLE_DIR/private/.git" ]]; then
+        return 0
     fi
+
+    local logs_dir="$BOOTIBLE_DIR/private/device/$DEVICE/$SELECTED_INSTANCE/Logs"
+    mkdir -p "$logs_dir"
+
+    # Get just the filename without bootible_ prefix
+    local log_filename
+    log_filename=$(basename "$LOG_FILE" | sed 's/^bootible_//')
+    local new_path="$logs_dir/$log_filename"
+
+    cp "$LOG_FILE" "$new_path"
+    LOG_FILE="$new_path"
+    echo -e "${GREEN}✓${NC} Log saved: device/$DEVICE/$SELECTED_INSTANCE/Logs/$log_filename"
 }
 
 push_log_to_git() {
@@ -117,8 +118,13 @@ push_log_to_git() {
         return 0
     fi
 
+    # Need to know the instance for the log path
+    if [[ -z "$SELECTED_INSTANCE" ]]; then
+        return 0
+    fi
+
     # The tee process is still writing to /tmp, so we need to find and copy
-    # the temp log file to private/logs before committing
+    # the temp log file to private device Logs before committing
     local temp_log
     temp_log=$(ls -t /tmp/bootible_*.log 2>/dev/null | head -1)
 
@@ -126,7 +132,7 @@ push_log_to_git() {
         return 0
     fi
 
-    local logs_dir="$private_dir/logs/$DEVICE"
+    local logs_dir="$private_dir/device/$DEVICE/$SELECTED_INSTANCE/Logs"
     mkdir -p "$logs_dir"
 
     # Copy final log content (tee is still appending to temp file)
@@ -144,8 +150,8 @@ push_log_to_git() {
 
     cd "$private_dir"
 
-    # Stage log files
-    git add "logs/$DEVICE/"*.log 2>/dev/null || true
+    # Stage log files for this device instance
+    git add "device/$DEVICE/$SELECTED_INSTANCE/Logs/"*.log 2>/dev/null || true
 
     # Check if there's anything to commit
     if git diff --cached --quiet 2>/dev/null; then
@@ -158,9 +164,9 @@ push_log_to_git() {
     git config user.email 2>/dev/null || git config user.email "bootible@localhost"
 
     # Commit and push
-    echo -e "${BLUE}→${NC} Committing log: logs/$DEVICE/$log_filename"
+    echo -e "${BLUE}→${NC} Committing log: device/$DEVICE/$SELECTED_INSTANCE/Logs/$log_filename"
     local commit_output
-    if commit_output=$(git commit -m "log: $DEVICE $run_type $(date '+%Y-%m-%d %H:%M')" 2>&1); then
+    if commit_output=$(git commit -m "log: $SELECTED_INSTANCE $run_type $(date '+%Y-%m-%d %H:%M')" 2>&1); then
         echo -e "${GREEN}✓${NC} Committed"
         echo -e "${BLUE}→${NC} Pushing to remote..."
 
@@ -597,11 +603,10 @@ needs_github_auth() {
 
     # Check config for enabled Decky plugins (>3 = rate limit risk)
     local config_file="$BOOTIBLE_DIR/config/$DEVICE/config.yml"
-    local private_config="$BOOTIBLE_DIR/private/$DEVICE/config.yml"
 
-    # Use private config if it exists
-    if [[ -f "$private_config" ]]; then
-        config_file="$private_config"
+    # Use selected config if available (device instance config)
+    if [[ -n "$SELECTED_CONFIG" && -f "$SELECTED_CONFIG" ]]; then
+        config_file="$SELECTED_CONFIG"
     fi
 
     if [[ -f "$config_file" ]]; then
@@ -754,7 +759,8 @@ setup_private() {
 # Select config file (if multiple exist in private)
 select_config() {
     SELECTED_CONFIG=""
-    PRIVATE_DEVICE_DIR="$BOOTIBLE_DIR/private/$DEVICE"
+    SELECTED_INSTANCE=""
+    PRIVATE_DEVICE_DIR="$BOOTIBLE_DIR/private/device/$DEVICE"
     DEFAULT_CONFIG="$BOOTIBLE_DIR/config/$DEVICE/config.yml"
 
     # Check if private device config directory exists
@@ -764,53 +770,51 @@ select_config() {
         return
     fi
 
-    # Find config files in private directory
-    CONFIG_FILES=()
-    while IFS= read -r -d '' file; do
-        CONFIG_FILES+=("$file")
-    done < <(find "$PRIVATE_DEVICE_DIR" -maxdepth 1 -name "config*.yml" -print0 2>/dev/null | sort -z)
+    # Find device instance directories (each subdirectory is a device instance)
+    DEVICE_INSTANCES=()
+    while IFS= read -r -d '' dir; do
+        DEVICE_INSTANCES+=("$dir")
+    done < <(find "$PRIVATE_DEVICE_DIR" -mindepth 1 -maxdepth 1 -type d -print0 2>/dev/null | sort -z)
 
-    # If no private configs, use default
-    if [[ ${#CONFIG_FILES[@]} -eq 0 ]]; then
+    # If no device instances, use default
+    if [[ ${#DEVICE_INSTANCES[@]} -eq 0 ]]; then
         echo -e "${BLUE}→${NC} Using default configuration"
         SELECTED_CONFIG="$DEFAULT_CONFIG"
         return
     fi
 
-    # If only one config, use it automatically
-    if [[ ${#CONFIG_FILES[@]} -eq 1 ]]; then
-        SELECTED_CONFIG="${CONFIG_FILES[0]}"
-        local config_name
-        config_name=$(basename "$SELECTED_CONFIG")
-        echo -e "${GREEN}✓${NC} Using config: $config_name"
+    # If only one instance, use it automatically
+    if [[ ${#DEVICE_INSTANCES[@]} -eq 1 ]]; then
+        SELECTED_INSTANCE=$(basename "${DEVICE_INSTANCES[0]}")
+        SELECTED_CONFIG="${DEVICE_INSTANCES[0]}/config.yml"
+        echo -e "${GREEN}✓${NC} Using config: $SELECTED_INSTANCE"
         return
     fi
 
-    # Multiple configs - let user choose
+    # Multiple instances - let user choose
     echo -e "${CYAN}Multiple configurations found:${NC}"
     echo ""
-    for i in "${!CONFIG_FILES[@]}"; do
-        local config_name
-        config_name=$(basename "${CONFIG_FILES[$i]}")
+    for i in "${!DEVICE_INSTANCES[@]}"; do
+        local instance_name
+        instance_name=$(basename "${DEVICE_INSTANCES[$i]}")
         local num=$((i + 1))
-        echo -e "  ${YELLOW}$num${NC}) $config_name"
+        echo -e "  ${YELLOW}$num${NC}) $instance_name"
     done
     echo ""
 
     while true; do
-        echo -n "Select configuration [1-${#CONFIG_FILES[@]}]: "
+        echo -n "Select configuration [1-${#DEVICE_INSTANCES[@]}]: "
         read -r selection < /dev/tty
 
-        if [[ "$selection" =~ ^[0-9]+$ ]] && [[ "$selection" -ge 1 ]] && [[ "$selection" -le ${#CONFIG_FILES[@]} ]]; then
+        if [[ "$selection" =~ ^[0-9]+$ ]] && [[ "$selection" -ge 1 ]] && [[ "$selection" -le ${#DEVICE_INSTANCES[@]} ]]; then
             local idx=$((selection - 1))
-            SELECTED_CONFIG="${CONFIG_FILES[$idx]}"
-            local config_name
-            config_name=$(basename "$SELECTED_CONFIG")
+            SELECTED_INSTANCE=$(basename "${DEVICE_INSTANCES[$idx]}")
+            SELECTED_CONFIG="${DEVICE_INSTANCES[$idx]}/config.yml"
             echo ""
-            echo -e "${GREEN}✓${NC} Selected: $config_name"
+            echo -e "${GREEN}✓${NC} Selected: $SELECTED_INSTANCE"
             return
         else
-            echo -e "${RED}Invalid selection. Please enter a number between 1 and ${#CONFIG_FILES[@]}${NC}"
+            echo -e "${RED}Invalid selection. Please enter a number between 1 and ${#DEVICE_INSTANCES[@]}${NC}"
         fi
     done
 }
@@ -999,6 +1003,11 @@ run_playbook() {
         echo ""
     fi
 
+    # Pass device instance name to ansible for path resolution
+    if [[ -n "$SELECTED_INSTANCE" ]]; then
+        EXTRA_VARS="$EXTRA_VARS -e device_instance=$SELECTED_INSTANCE"
+    fi
+
     # Add GitHub token if available
     if [[ -n "$GITHUB_TOKEN" ]]; then
         EXTRA_VARS="$EXTRA_VARS -e github_token=$GITHUB_TOKEN"
@@ -1074,11 +1083,11 @@ main() {
     setup_private
     echo ""
 
-    # Move log to private repo if available
-    move_log_to_private
-
     select_config
     echo ""
+
+    # Move log to private repo now that we know the device instance
+    move_log_to_private
 
     # Check if GitHub auth is needed (many plugins or private repo)
     if needs_github_auth; then

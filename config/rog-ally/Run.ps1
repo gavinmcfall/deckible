@@ -17,8 +17,9 @@
 
 .CONFIGURATION
     - Defaults: config.yml
-    - Your settings: ../../private/rog-ally/config.yml (overrides defaults)
-    - Private files: ../../private/rog-ally/
+    - Your settings: ../../private/device/rog-ally/<DeviceName>/config.yml
+    - Shared scripts: ../../private/scripts/
+    - Device images: ../../private/device/rog-ally/<DeviceName>/Images/
 
 .NOTES
     Requires Windows 10/11 and PowerShell 5.1+
@@ -33,6 +34,12 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+# Extract instance name from ConfigFile path (e.g., private/device/rog-ally/Vengeance/config.yml -> Vengeance)
+$Script:SelectedInstance = ""
+if ($ConfigFile -and $ConfigFile -match 'device[/\\]rog-ally[/\\]([^/\\]+)[/\\]config\.yml$') {
+    $Script:SelectedInstance = $matches[1]
+}
 
 # Check if transcript already running (from ally.ps1 bootstrap)
 if ($env:BOOTIBLE_TRANSCRIPT -and (Test-Path $env:BOOTIBLE_TRANSCRIPT)) {
@@ -52,8 +59,9 @@ if ($env:BOOTIBLE_TRANSCRIPT -and (Test-Path $env:BOOTIBLE_TRANSCRIPT)) {
     $hostname = $env:COMPUTERNAME.ToLower()
     $logFileName = "$(Get-Date -Format 'yyyy-MM-dd_HHmmss')_${hostname}$suffix.log"
 
-    if (Test-Path $privatePath) {
-        $logsPath = Join-Path $privatePath "logs\rog-ally"
+    if ((Test-Path $privatePath) -and $Script:SelectedInstance) {
+        # Use device instance Logs folder
+        $logsPath = Join-Path $privatePath "device\rog-ally\$($Script:SelectedInstance)\Logs"
         if (-not (Test-Path $logsPath)) {
             New-Item -ItemType Directory -Path $logsPath -Force | Out-Null
         }
@@ -1385,20 +1393,31 @@ if (-not $Script:TranscriptInherited) {
             $ErrorActionPreference = "Continue"
             try {
                 $runType = if ($Script:DryRun) { "dry run" } else { "run" }
-                $logRelPath = "logs/rog-ally/$logFileName"
+
+                # Build log path based on whether we have a selected instance
+                if ($Script:SelectedInstance) {
+                    $logRelPath = "device/rog-ally/$($Script:SelectedInstance)/Logs/$logFileName"
+                    $logGlobPath = "device/rog-ally/$($Script:SelectedInstance)/Logs/*.log"
+                    $instanceName = $Script:SelectedInstance
+                } else {
+                    # Fallback if no instance (shouldn't happen normally)
+                    $logRelPath = "device/rog-ally"
+                    $logGlobPath = "device/rog-ally/**/*.log"
+                    $instanceName = "rog-ally"
+                }
 
                 # Verify log file exists before attempting git operations
                 if (-not (Test-Path $logRelPath)) {
                     Write-Host "[!] Log file not found: $logRelPath" -ForegroundColor Yellow
                 } else {
                     # Stage all log files (including any from failed previous runs)
-                    & git add "logs/rog-ally/*.log" 2>$null
+                    & git add $logGlobPath 2>$null
 
                     # Check if there's anything to commit
                     $stagedFiles = & git diff --cached --name-only 2>$null
                     if ($stagedFiles) {
                         # Commit with output captured to verify success
-                        $commitOutput = & git commit -m "log: rog-ally $runType $(Get-Date -Format 'yyyy-MM-dd HH:mm')" 2>&1
+                        $commitOutput = & git commit -m "log: $instanceName $runType $(Get-Date -Format 'yyyy-MM-dd HH:mm')" 2>&1
 
                         # Verify commit actually happened by checking if files are still staged
                         $stillStaged = & git diff --cached --name-only 2>$null

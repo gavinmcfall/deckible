@@ -3,7 +3,7 @@
 # Default settings for Steam Deck setup.
 #
 # To customize: Create a private overlay repo and override these values
-# in private/steamdeck/config.yml. See README.md for details.
+# in private/device/steamdeck/<YourDeviceName>/config.yml. See README.md for details.
 #
 # Or edit this file directly if you've forked the repo.
 
@@ -42,7 +42,7 @@ static_ip:
 #
 # MANUAL AUTH (Alternative):
 # Create a token at: https://github.com/settings/tokens (no scopes needed)
-# Put it in your private config (private/steamdeck/config.yml), not here!
+# Put it in your private device config, not here!
 github_token: ""
 
 # =============================================================================

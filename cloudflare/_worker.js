@@ -565,7 +565,7 @@ function getLandingPage() {
       <p>Bootible runs in <strong>dry-run mode</strong> by default. Preview all changes before applying.</p>
       <ul>
         <li>Everything is opt-in via config</li>
-        <li>Creates restore points (Windows)</li>
+        <li>Creates restore points (Windows) and btrfs snapshots (Steam Deck)</li>
         <li>Private config stays in your own repo</li>
         <li>Open source and auditable</li>
       </ul>
