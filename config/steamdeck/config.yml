@@ -245,7 +245,7 @@ decky_plugins:
 
   isthereanydeal:
     enabled: false
-    store_name: "IsThereAnyDeal"
+    store_name: "IsThereAnyDeal for Deck"
     description: "Game deal notifications"
 
   # Customization
