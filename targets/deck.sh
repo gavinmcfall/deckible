@@ -343,21 +343,19 @@ install_ansible() {
     # Fall back to pacman
     echo "  Using pacman..."
 
-    # Set trap to restore read-only mode on exit/error
-    trap 'sudo steamos-readonly enable 2>/dev/null' EXIT
-    sudo steamos-readonly disable 2>/dev/null || true
+    # Use subshell so trap doesn't overwrite main script's cleanup_and_push_log trap
+    (
+        trap 'sudo steamos-readonly enable 2>/dev/null' EXIT
+        sudo steamos-readonly disable 2>/dev/null || true
 
-    # Refresh keyring to avoid PGP signature errors
-    echo "  Refreshing pacman keyring..."
-    sudo pacman-key --init 2>/dev/null || true
-    sudo pacman-key --populate archlinux 2>/dev/null || true
-    sudo pacman -Sy --noconfirm archlinux-keyring 2>/dev/null || true
+        # Refresh keyring to avoid PGP signature errors
+        echo "  Refreshing pacman keyring..."
+        sudo pacman-key --init 2>/dev/null || true
+        sudo pacman-key --populate archlinux 2>/dev/null || true
+        sudo pacman -Sy --noconfirm archlinux-keyring 2>/dev/null || true
 
-    sudo pacman -S --noconfirm ansible
-
-    # Clear trap and restore read-only (trap will fire on exit anyway)
-    trap - EXIT
-    sudo steamos-readonly enable 2>/dev/null || true
+        sudo pacman -S --noconfirm ansible
+    )
     echo -e "${GREEN}✓${NC} Ansible installed via pacman"
 }
 
@@ -388,37 +386,36 @@ install_gh_cli() {
 
     echo -e "${BLUE}→${NC} Installing GitHub CLI and dependencies..."
 
-    # Unlock filesystem temporarily
-    trap 'sudo steamos-readonly enable 2>/dev/null' EXIT
-    sudo steamos-readonly disable 2>/dev/null || true
-
-    # Refresh keyrings (both Arch and SteamOS)
-    echo "  Refreshing package keyrings..."
-    sudo pacman-key --init 2>/dev/null || true
-    sudo pacman-key --populate archlinux 2>/dev/null || true
-    sudo pacman-key --populate holo 2>/dev/null || true
-
-    # Update keyring packages first
-    sudo pacman -Sy --noconfirm archlinux-keyring 2>/dev/null || true
-
-    # Install packages
+    # Build packages list before subshell
     local packages=""
     command -v gh &> /dev/null || packages="$packages github-cli"
     command -v jq &> /dev/null || packages="$packages jq"
     command -v qrencode &> /dev/null || packages="$packages qrencode"
 
-    if [[ -n "$packages" ]]; then
-        # shellcheck disable=SC2086  # Intentional word splitting
-        if ! sudo pacman -S --noconfirm $packages; then
-            echo -e "${YELLOW}!${NC} Pacman install failed, trying with --overwrite..."
-            # shellcheck disable=SC2086
-            sudo pacman -S --noconfirm --overwrite '*' $packages || true
-        fi
-    fi
+    # Use subshell so trap doesn't overwrite main script's cleanup_and_push_log trap
+    (
+        trap 'sudo steamos-readonly enable 2>/dev/null' EXIT
+        sudo steamos-readonly disable 2>/dev/null || true
 
-    # Restore read-only
-    trap - EXIT
-    sudo steamos-readonly enable 2>/dev/null || true
+        # Refresh keyrings (both Arch and SteamOS)
+        echo "  Refreshing package keyrings..."
+        sudo pacman-key --init 2>/dev/null || true
+        sudo pacman-key --populate archlinux 2>/dev/null || true
+        sudo pacman-key --populate holo 2>/dev/null || true
+
+        # Update keyring packages first
+        sudo pacman -Sy --noconfirm archlinux-keyring 2>/dev/null || true
+
+        # Install packages
+        if [[ -n "$packages" ]]; then
+            # shellcheck disable=SC2086  # Intentional word splitting
+            if ! sudo pacman -S --noconfirm $packages; then
+                echo -e "${YELLOW}!${NC} Pacman install failed, trying with --overwrite..."
+                # shellcheck disable=SC2086
+                sudo pacman -S --noconfirm --overwrite '*' $packages || true
+            fi
+        fi
+    )
 
     # Verify gh was installed
     if command -v gh &> /dev/null; then

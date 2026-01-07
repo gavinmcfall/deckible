@@ -198,6 +198,10 @@
     msg: "{{ 'SSH key added to GitHub' if gh_key_add.rc | default(1) == 0 else 'Could not add key to GitHub (may already exist): ' + (gh_key_add.stderr | default('')) }}"
   when: ssh_add_to_github | default(false)
 
+# WARNING: This rewrites all HTTPS GitHub URLs to SSH globally.
+# This can break the bootstrap script if run again (expects HTTPS).
+# Only enable if you understand the implications and have SSH keys
+# properly configured on GitHub.
 - name: Configure git to use SSH for GitHub
   ansible.builtin.command:
     cmd: git config --global url."git@github.com:".insteadOf "https://github.com/"
