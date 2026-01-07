@@ -202,6 +202,14 @@
 # This can break the bootstrap script if run again (expects HTTPS).
 # Only enable if you understand the implications and have SSH keys
 # properly configured on GitHub.
+- name: Add GitHub SSH host key to known_hosts
+  ansible.builtin.known_hosts:
+    name: github.com
+    key: "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl"
+    path: "{{ deck_home }}/.ssh/known_hosts"
+    state: present
+  when: ssh_configure_git | default(false)
+
 - name: Configure git to use SSH for GitHub
   ansible.builtin.command:
     cmd: git config --global url."git@github.com:".insteadOf "https://github.com/"
