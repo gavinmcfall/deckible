@@ -95,6 +95,16 @@
 # These are installed when password_manager_install_method is "flatpak"
 # Note: Flatpak versions have limited features (no system auth, no SSH agent)
 
+- name: Check if 1Password is already installed
+  ansible.builtin.command:
+    cmd: flatpak list --app --columns=application
+  register: flatpak_apps
+  changed_when: false
+  failed_when: false
+  when:
+    - password_manager | default('none') == '1password'
+    - password_manager_install_method | default('flatpak') == 'flatpak'
+
 - name: Install 1Password (Flatpak)
   community.general.flatpak:
     name: https://downloads.1password.com/linux/flatpak/1Password.flatpakref
@@ -104,6 +114,7 @@
   when:
     - password_manager | default('none') == '1password'
     - password_manager_install_method | default('flatpak') == 'flatpak'
+    - "'com.onepassword.OnePassword' not in (flatpak_apps.stdout | default(''))"
 
 - name: Install Bitwarden (Flatpak)
   community.general.flatpak:
