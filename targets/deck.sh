@@ -161,19 +161,39 @@ push_log_to_git() {
     echo -e "${BLUE}→${NC} Committing log: logs/$DEVICE/$log_filename"
     local commit_output
     if commit_output=$(git commit -m "log: $DEVICE $run_type $(date '+%Y-%m-%d %H:%M')" 2>&1); then
-        echo -e "${GREEN}✓${NC} Committed: $commit_output"
+        echo -e "${GREEN}✓${NC} Committed"
         echo -e "${BLUE}→${NC} Pushing to remote..."
 
-        # Ensure gh credential helper is set up for push
+        # Try gh for push (most reliable after device flow auth)
+        local push_success=false
         if command -v gh &>/dev/null && gh auth status &>/dev/null 2>&1; then
+            gh config set git_protocol https 2>/dev/null || true
             gh auth setup-git 2>/dev/null || true
+            if git push 2>&1; then
+                push_success=true
+            fi
         fi
 
-        local push_output
-        if push_output=$(git push 2>&1); then
+        # If gh push failed, try with token in URL
+        if [[ "$push_success" != "true" ]]; then
+            local token
+            token=$(gh auth token 2>/dev/null || true)
+            if [[ -n "$token" ]]; then
+                local remote_url
+                remote_url=$(git remote get-url origin)
+                # Convert to HTTPS with token
+                local auth_url
+                auth_url=$(echo "$remote_url" | sed "s|https://github.com|https://${token}@github.com|" | sed "s|git@github.com:|https://${token}@github.com/|")
+                if git push "$auth_url" HEAD 2>&1; then
+                    push_success=true
+                fi
+            fi
+        fi
+
+        if [[ "$push_success" == "true" ]]; then
             echo -e "${GREEN}✓${NC} Log pushed to private repo"
         else
-            echo -e "${YELLOW}!${NC} Log saved locally (push requires repo write access)"
+            echo -e "${YELLOW}!${NC} Log saved locally (push failed)"
         fi
     else
         echo -e "${YELLOW}!${NC} Git commit failed: $commit_output"
