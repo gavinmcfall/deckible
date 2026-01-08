@@ -22,6 +22,7 @@ Describe "Install-WingetPackage" {
             Mock winget {
                 return "Test.Package  1.0.0  winget"
             } -ParameterFilter { ($args -join ' ') -match 'list --id Test\.Package' }
+            Mock Start-Job { [PSCustomObject]@{ Id = 1; State = 'Running' } }
 
             $result = Install-WingetPackage -PackageId "Test.Package" -Name "Test Package"
 
@@ -49,20 +50,14 @@ Describe "Install-WingetPackage" {
         }
 
         It "Falls back to msstore when winget source fails" {
-            $jobCounter = 0
+            $script:jobCounter = 0
             Mock Start-Job {
-                $jobCounter++
-                [PSCustomObject]@{ Id = $jobCounter; State = 'Running' }
+                $script:jobCounter++
+                [PSCustomObject]@{ Id = $script:jobCounter; State = 'Running' }
             }
             Mock Wait-Job { $true }
-            Mock Receive-Job {
-                param($Job)
-                if ($Job.Id -eq 1) {
-                    return @{ ExitCode = 1; Output = "Winget source failed" }
-                } else {
-                    return @{ ExitCode = 0; Output = "msstore success" }
-                }
-            }
+            Mock Receive-Job { @{ ExitCode = 1; Output = "Winget source failed" } } -ParameterFilter { $Id -eq 1 }
+            Mock Receive-Job { @{ ExitCode = 0; Output = "msstore success" } } -ParameterFilter { $Id -eq 2 }
             Mock Remove-Job { }
 
             $result = Install-WingetPackage -PackageId "Test.Package" -Name "Test Package"
@@ -134,6 +129,7 @@ Describe "Install-WingetPackage" {
                 $global:LASTEXITCODE = 0
                 return "Found Test.Package"
             } -ParameterFilter { ($args -join ' ') -match 'show --id.*--source winget' }
+            Mock Start-Job { [PSCustomObject]@{ Id = 1; State = 'Running' } }
 
             $result = Install-WingetPackage -PackageId "Test.Package" -Name "Test Package"
 
