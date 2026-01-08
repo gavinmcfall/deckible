@@ -372,7 +372,8 @@ Runs desktop apps in containers for better integration than Flatpak sandboxing.
 **Use Case:** 1Password with browser integration works better via Distrobox than Flatpak.
 
 ```yaml
-password_manager: "1password"
+password_managers:
+  - "1password"
 password_manager_install_method: "distrobox"
 ```
 

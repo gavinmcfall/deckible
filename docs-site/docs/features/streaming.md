@@ -1,45 +1,81 @@
 ---
 title: Game Streaming
-description: Stream games from your PC or console to your handheld
+description: Stream games between your PC, handhelds, and consoles
 ---
 
 # Game Streaming
 
-Play games from your gaming PC or console on your handheld device over your network.
+Stream games between your devices over your network—from PC to handheld, handheld to PC, or console to handheld.
 
 ---
 
 ## Overview
 
-| Source | Client | Platform Support |
-|--------|--------|------------------|
-| Gaming PC (NVIDIA) | Moonlight | Steam Deck, ROG Ally |
-| Gaming PC (Any GPU) | Parsec | Steam Deck, ROG Ally |
-| Gaming PC (Steam) | Steam Link | Steam Deck, ROG Ally |
-| PlayStation | Chiaki-ng | Steam Deck, ROG Ally |
-| Xbox/Cloud | Greenlight / Xbox App | Steam Deck, ROG Ally |
+**Moonlight + Sunshine** is the recommended combo for PC streaming. Install both on all your devices and stream in any direction.
+
+| Direction | Server (Host) | Client |
+|-----------|---------------|--------|
+| PC → Handheld | Sunshine (PC) | Moonlight (Handheld) |
+| Handheld → PC | Sunshine (Handheld) | Moonlight (PC) |
+| PlayStation → Any | PlayStation | Chiaki-ng |
+| Xbox/Cloud → Any | Xbox/Cloud | Greenlight / Xbox App |
 
 ---
 
 ## Moonlight + Sunshine
 
-The best option for streaming from your gaming PC. Works with any GPU.
+The best option for streaming between your PC and handhelds. Works with **any GPU** (NVIDIA, AMD, Intel).
+
+!!! tip "Bidirectional Streaming"
+    Install Sunshine AND Moonlight on all your devices. This lets you stream in any direction—PC to handheld, handheld to PC, or even handheld to handheld.
 
 ### What You Need
 
-| Device | Software |
-|--------|----------|
-| **PC (Host)** | Sunshine |
-| **Handheld (Client)** | Moonlight |
+| Device | Install |
+|--------|---------|
+| **Desktop/Laptop** | Sunshine + Moonlight |
+| **Steam Deck** | Sunshine + Moonlight |
+| **ROG Ally** | Sunshine + Moonlight |
 
-### Setup: PC Host
+### Setup: Sunshine (Host/Server)
 
-1. Install [Sunshine](https://github.com/LizardByte/Sunshine) on your gaming PC
-2. Open web UI: `https://localhost:47990`
-3. Set up a username and password
-4. Add games to Sunshine (optional - can also stream full desktop)
+Install Sunshine on any device you want to stream FROM:
 
-### Setup: Handheld
+=== "Desktop/Laptop"
+
+    !!! info "Manual Install"
+        Bootible doesn't configure desktops or laptops—install Sunshine manually.
+
+    Sunshine works with **any GPU**—NVIDIA (NVENC), AMD (AMF), or Intel (QuickSync).
+
+    1. Download from [Sunshine Releases](https://github.com/LizardByte/Sunshine/releases)
+    2. Install the appropriate package for your OS
+    3. Open web UI: `https://localhost:47990`
+    4. Set up a username and password
+    5. Add games to Sunshine (optional - can also stream full desktop)
+
+    !!! note "NVIDIA GameStream is deprecated"
+        Sunshine replaces NVIDIA GameStream, which was discontinued. Sunshine works with all GPUs and is actively maintained.
+
+=== "Steam Deck"
+
+    ```yaml
+    install_sunshine: true
+    ```
+
+    After install, access web UI at `https://localhost:47990` to configure.
+
+=== "ROG Ally"
+
+    ```yaml
+    install_sunshine: true
+    ```
+
+    After install, access web UI at `https://localhost:47990` to configure.
+
+### Setup: Moonlight (Client)
+
+Install Moonlight on any device you want to stream TO:
 
 === "Steam Deck"
 
@@ -53,11 +89,18 @@ The best option for streaming from your gaming PC. Works with any GPU.
     install_moonlight: true
     ```
 
+=== "Desktop/Laptop"
+
+    !!! info "Manual Install"
+        Bootible doesn't configure desktops or laptops—install Moonlight manually.
+
+    Download from [moonlight-stream.org](https://moonlight-stream.org/)
+
 ### Pairing
 
-1. Launch Moonlight on handheld
-2. Your PC should appear automatically (if on same network)
-3. Click on PC, enter the PIN shown in Moonlight into Sunshine's web UI
+1. Launch Moonlight on the client device
+2. The host should appear automatically (if on same network)
+3. Click on host, enter the PIN shown in Moonlight into Sunshine's web UI
 4. Start streaming!
 
 ### Optimal Settings
@@ -290,9 +333,11 @@ For streaming outside your local network:
 
 ## Comparison Table
 
-| Feature | Moonlight | Parsec | Steam Link | Chiaki | Xbox Cloud |
-|---------|-----------|--------|------------|--------|------------|
-| **Source** | PC | PC | PC (Steam) | PlayStation | Cloud/Xbox |
+| Feature | Moonlight + Sunshine | Parsec | Steam Link | Chiaki | Xbox Cloud |
+|---------|----------------------|--------|------------|--------|------------|
+| **Source** | Any device | PC | PC (Steam) | PlayStation | Cloud/Xbox |
+| **Direction** | Bidirectional | Bidirectional | PC → Client | Console → Client | Cloud → Client |
+| **GPU Support** | Any (NVIDIA, AMD, Intel) | Any | Any | N/A | N/A |
 | **Latency** | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐ |
 | **Quality** | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐ |
 | **Setup** | Medium | Easy | Easy | Medium | Easy |

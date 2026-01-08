@@ -76,10 +76,11 @@ install_everything: true  # Fast file search
 install_windows_terminal: true
 install_powershell7: true
 
-# Password Manager
-# ----------------
-# Options: "1password", "bitwarden", "keepassxc", "none"
-password_manager: "none"
+# Password Managers
+# -----------------
+# Install one or more password managers.
+# Options: "1password", "bitwarden", "keepassxc"
+password_managers: []
 
 # =============================================================================
 # GAMING

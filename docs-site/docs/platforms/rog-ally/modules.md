@@ -167,7 +167,7 @@ Validating packages...
 | **Browsers** | `install_firefox`, `install_chrome`, `install_edge` |
 | **Productivity** | `install_obs`, `install_vscode` |
 | **VPN** | `install_tailscale`, `install_protonvpn` |
-| **Password Managers** | `password_manager`: `1password`, `bitwarden`, `keepassxc` |
+| **Password Managers** | `password_managers`: list of `1password`, `bitwarden`, `keepassxc` |
 | **Development** | `install_git`, `install_python`, `install_nodejs`, `install_java` |
 | **System Utilities** | `install_revo`, `install_ccleaner`, `install_wiztree` |
 | **Runtimes** | `install_dotnet`, `install_vcredist`, `install_directx` |
@@ -178,7 +178,8 @@ Validating packages...
 install_apps: true
 install_discord: true
 install_spotify: true
-password_manager: "1password"
+password_managers:
+  - "1password"
 install_pwsh: true  # PowerShell 7
 ```
 

@@ -77,12 +77,12 @@ After setup, your private repo will look like this:
 private/
 ├── device/
 │   ├── rog-ally/
-│   │   └── Vengeance/              # Your device name
+│   │   └── MyRogAlly/              # Your device name
 │   │       ├── config.yml          # Device configuration
 │   │       ├── Images/             # Wallpapers, avatars
 │   │       └── Logs/               # Run logs (auto-pushed)
 │   └── steamdeck/
-│       └── GameDeck/
+│       └── MySteamDeck/
 │           ├── config.yml
 │           ├── Images/
 │           └── Logs/
@@ -108,12 +108,13 @@ Each device has a `config.yml` that overrides defaults:
 === "Steam Deck Example"
 
     ```yaml
-    # private/device/steamdeck/GameDeck/config.yml
+    # private/device/steamdeck/MySteamDeck/config.yml
 
     # Apps
     install_discord: true
     install_spotify: true
-    password_manager: "1password"
+    password_managers:
+      - "1password"
     password_manager_install_method: "distrobox"
 
     # Streaming
@@ -142,12 +143,13 @@ Each device has a `config.yml` that overrides defaults:
 === "ROG Ally Example"
 
     ```yaml
-    # private/device/rog-ally/Vengeance/config.yml
+    # private/device/rog-ally/MyRogAlly/config.yml
 
     # Apps
     install_discord: true
     install_spotify: true
-    password_manager: "1password"
+    password_managers:
+      - "1password"
 
     # Gaming
     install_steam: true
@@ -179,7 +181,7 @@ Each device has a `config.yml` that overrides defaults:
 Place images in your device's `Images/` folder:
 
 ```
-device/rog-ally/Vengeance/Images/
+device/rog-ally/MyRogAlly/Images/
 ├── wallpaper.jpg
 ├── lockscreen.jpg
 └── avatar.png
@@ -245,7 +247,7 @@ Enter your private repo (e.g., username/repo): myuser/gaming
 
 1. Edit your config file:
    ```bash
-   nano ~/bootible/private/device/steamdeck/GameDeck/config.yml
+   nano ~/bootible/private/device/steamdeck/MySteamDeck/config.yml
    ```
 
 2. Commit and push:
@@ -266,9 +268,9 @@ Enter your private repo (e.g., username/repo): myuser/gaming
 Bootible automatically pushes run logs to your private repo:
 
 ```
-device/steamdeck/GameDeck/Logs/
-├── 2025-01-08_143022_gamedeck_run.log
-├── 2025-01-07_091544_gamedeck_dryrun.log
+device/steamdeck/MySteamDeck/Logs/
+├── 2025-01-08_143022_mysteamdeck_run.log
+├── 2025-01-07_091544_mysteamdeck_dryrun.log
 └── ...
 ```
 

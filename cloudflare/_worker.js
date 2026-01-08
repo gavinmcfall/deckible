@@ -4,7 +4,7 @@
  * Routes:
  *   /rog        -> targets/ally.ps1 (ROG Ally / Windows)
  *   /deck       -> targets/deck.sh  (Steam Deck / SteamOS)
- *   /docs       -> README rendered as HTML
+ *   /docs       -> Redirect to docs.bootible.dev
  *   /           -> Landing page (browser) or help text (CLI)
  *   /*.png      -> Static assets (served by Pages)
  */
@@ -24,11 +24,9 @@ const ROUTES = {
   '/deck': {
     path: '/targets/deck.sh',
     description: 'Steam Deck (SteamOS)',
-    sha256: '0af3cd6aaaa43c3219beb5c938036afd5cfd3eabbfa8b71f9f3d3b2b1c98f65f',
+    sha256: 'cf4d1ac9c791afc9e9b5d73445b449b530163428d7e064518035c1ab3ca481d1',
   },
 };
-
-const README_URL = `${GITHUB_RAW_BASE}/README.md`;
 
 // Cache settings
 const SCRIPT_CACHE_TTL = 300; // 5 minutes - how long to serve cached scripts
@@ -97,169 +95,6 @@ function sanitizeUrl(url) {
     return '#blocked';
   }
   return escapeHtml(url);
-}
-
-/**
- * Markdown to HTML converter
- */
-function markdownToHtml(md) {
-  let html = md;
-
-  const codeBlocks = [];
-  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
-    codeBlocks.push(`<pre><code class="language-${escapeHtml(lang)}">${escapeHtml(code)}</code></pre>`);
-    return `__CODE_BLOCK_${codeBlocks.length - 1}__`;
-  });
-
-  const inlineCodes = [];
-  html = html.replace(/`([^`]+)`/g, (_, code) => {
-    inlineCodes.push(`<code>${escapeHtml(code)}</code>`);
-    return `__INLINE_CODE_${inlineCodes.length - 1}__`;
-  });
-
-  html = html.replace(/^\|(.+)\|\n\|[-| :]+\|\n((?:\|.+\|\n?)+)/gm, (_, header, body) => {
-    const headerCells = header.split('|').map(c => c.trim()).filter(Boolean);
-    const headerRow = headerCells.map(c => `<th>${escapeHtml(c)}</th>`).join('');
-    const bodyRows = body.trim().split('\n').map(row => {
-      const cells = row.split('|').map(c => c.trim()).filter(Boolean);
-      return `<tr>${cells.map(c => `<td>${escapeHtml(c)}</td>`).join('')}</tr>`;
-    }).join('\n');
-    return `<table><thead><tr>${headerRow}</tr></thead><tbody>${bodyRows}</tbody></table>`;
-  });
-
-  html = html.replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>');
-  html = html.replace(/<\/blockquote>\n<blockquote>/g, '\n');
-  html = html.replace(/^---+$/gm, '<hr>');
-  html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, src) =>
-    `<img src="${sanitizeUrl(src)}" alt="${escapeHtml(alt)}">`
-  );
-  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, text, href) =>
-    `<a href="${sanitizeUrl(href)}" target="_blank">${text}</a>`
-  );
-  html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
-  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
-  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
-  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
-  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-  html = html.replace(/^(\s*)[-*] (.+)$/gm, '$1<li>$2</li>');
-  html = html.replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>');
-  html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
-  html = html.replace(/^(?!<[a-z]|__|\s*$)(.+)$/gm, '<p>$1</p>');
-
-  codeBlocks.forEach((block, i) => {
-    html = html.replace(`__CODE_BLOCK_${i}__`, block);
-  });
-  inlineCodes.forEach((code, i) => {
-    html = html.replace(`__INLINE_CODE_${i}__`, code);
-  });
-
-  html = html.replace(/<p><\/p>/g, '');
-  html = html.replace(/<p>\s*<\/p>/g, '');
-  html = html.replace(/\n{3,}/g, '\n\n');
-
-  return html;
-}
-
-/**
- * Generate docs page from README
- */
-function getDocsPage(readmeHtml) {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Bootible Documentation</title>
-  <link rel="icon" type="image/png" href="/favicon.png">
-  <style>
-    :root {
-      --bg-dark: #0d1117;
-      --bg-card: #161b22;
-      --accent: #58a6ff;
-      --text-primary: #f0f6fc;
-      --text-secondary: #8b949e;
-      --border: #30363d;
-      --success: #3fb950;
-    }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: var(--bg-dark);
-      color: var(--text-primary);
-      line-height: 1.7;
-      padding: 40px 20px;
-    }
-    .container { max-width: 800px; margin: 0 auto; }
-    .back-link {
-      display: inline-block;
-      color: var(--accent);
-      text-decoration: none;
-      margin-bottom: 24px;
-      font-size: 0.9rem;
-    }
-    .back-link:hover { text-decoration: underline; }
-    h1, h2, h3, h4 { margin: 24px 0 12px; color: var(--text-primary); }
-    h1 { font-size: 2rem; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
-    h2 { font-size: 1.5rem; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
-    h3 { font-size: 1.25rem; }
-    p { margin: 12px 0; color: var(--text-secondary); }
-    a { color: var(--accent); }
-    code {
-      background: var(--bg-card);
-      padding: 2px 6px;
-      border-radius: 4px;
-      font-family: 'SF Mono', 'Fira Code', monospace;
-      font-size: 0.9em;
-    }
-    pre {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 16px;
-      overflow-x: auto;
-      margin: 16px 0;
-    }
-    pre code { background: none; padding: 0; }
-    ul, ol { margin: 12px 0; padding-left: 24px; color: var(--text-secondary); }
-    li { margin: 6px 0; }
-    strong { color: var(--text-primary); }
-    table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
-    th, td { border: 1px solid var(--border); padding: 10px 14px; text-align: left; }
-    th { background: var(--bg-card); color: var(--text-primary); font-weight: 600; }
-    td { color: var(--text-secondary); }
-    tr:nth-child(even) td { background: rgba(22, 27, 34, 0.5); }
-    blockquote {
-      border-left: 4px solid var(--accent);
-      background: var(--bg-card);
-      margin: 16px 0;
-      padding: 12px 20px;
-      border-radius: 0 8px 8px 0;
-      color: var(--text-secondary);
-      font-style: italic;
-    }
-    hr { border: none; border-top: 1px solid var(--border); margin: 32px 0; }
-    details {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      margin: 16px 0;
-      padding: 12px 16px;
-    }
-    summary { cursor: pointer; color: var(--accent); font-weight: 500; }
-    summary:hover { text-decoration: underline; }
-    details[open] summary { margin-bottom: 12px; }
-    img { max-width: 100%; height: auto; vertical-align: middle; }
-    img[alt*="badge"], img[alt*="License"], img[alt*="shield"] { height: 20px; margin-right: 8px; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <a href="/" class="back-link">← Back to Bootible</a>
-    ${readmeHtml}
-  </div>
-</body>
-</html>`;
 }
 
 /**
@@ -477,7 +312,7 @@ function getLandingPage() {
         <div class="callout-title">New to Bootible?</div>
         <div class="callout-text">Read the documentation to understand what gets installed and how to customize your setup.</div>
       </div>
-      <a href="/docs" class="callout-link">Read the Docs →</a>
+      <a href="https://docs.bootible.dev" class="callout-link">Read the Docs →</a>
     </div>
 
     <section class="devices">
@@ -616,33 +451,9 @@ export default {
       return Response.redirect(`${url.origin}/deck`, 302);
     }
 
-    // Handle docs page - fetch README from GitHub and render as HTML
+    // Redirect old /docs to new docs site
     if (path === '/docs') {
-      try {
-        const response = await fetchWithTimeout(README_URL);
-
-        if (!response.ok) {
-          return new Response('Failed to load documentation', {
-            status: 502,
-            headers: { 'Content-Type': 'text/plain' },
-          });
-        }
-
-        const markdown = await response.text();
-        const html = markdownToHtml(markdown);
-
-        return new Response(getDocsPage(html), {
-          headers: {
-            'Content-Type': 'text/html; charset=utf-8',
-            'Cache-Control': `public, max-age=${SCRIPT_CACHE_TTL}`,
-          },
-        });
-      } catch (error) {
-        return new Response(`Error loading docs: ${error}`, {
-          status: 502,
-          headers: { 'Content-Type': 'text/plain' },
-        });
-      }
+      return Response.redirect('https://docs.bootible.dev', 301);
     }
 
     // Handle script routes (proxy from GitHub with caching and integrity verification)

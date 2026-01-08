@@ -103,11 +103,20 @@ package_managers:
 | `install_windows_terminal` | bool | `true` | Windows Terminal |
 | `install_powershell7` | bool | `true` | PowerShell 7 |
 
-### Password Manager
+### Password Managers
 
-| Key | Type | Default | Options |
-|-----|------|---------|---------|
-| `password_manager` | string | `"none"` | `1password`, `bitwarden`, `keepassxc`, `none` |
+```yaml
+# Install one or more password managers
+password_managers:
+  - "1password"
+  - "bitwarden"
+```
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `password_managers` | list | `[]` | Password managers to install |
+
+**Available managers:** `1password`, `bitwarden`, `keepassxc`
 
 ---
 
@@ -552,7 +561,8 @@ create_restore_point: true
 # Apps
 install_discord: true
 install_spotify: true
-password_manager: "1password"
+password_managers:
+  - "1password"
 
 # Gaming
 install_steam: true

@@ -54,8 +54,12 @@ Before running Bootible, make sure you have:
 === "Steam Deck"
 
     - [x] Steam Deck with internet connection
-    - [x] Desktop Mode access (hold power button → Switch to Desktop)
-    - [x] Sudo password set (`passwd` in Konsole if not set)
+    - [x] Desktop Mode access (hold power button → Switch to Desktop, or press Steam button → Power → Switch to Desktop)
+    - [x] Sudo password set — from Desktop Mode, open Konsole and run `passwd` to set your password
+
+        !!! tip "Save your password"
+            Store this password in your password manager of choice. You'll need it when running Bootible.
+
     - [ ] *Optional:* GitHub account for private config
 
 === "ROG Ally"

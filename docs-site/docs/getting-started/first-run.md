@@ -111,8 +111,8 @@ If your private repo has multiple device configurations, you'll choose one:
 ```
 Multiple configurations found:
 
-  1) Vengeance
-  2) GameDeck
+  1) MySteamDeck
+  2) MyRogAlly
 
 Select configuration [1-2]:
 ```

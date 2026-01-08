@@ -293,38 +293,28 @@ Tailscale doesn't support WoL directly, but you can:
 
 ## Quick Reference
 
-### Find Device IP
+#### Find Device IP
 
 === "Steam Deck"
 
     ```bash
-    # In Konsole
-    ip addr show
-    # or
     hostname -I
     ```
 
 === "ROG Ally"
 
     ```powershell
-    # In PowerShell
     ipconfig
-    # or
-    (Get-NetIPAddress -AddressFamily IPv4 | Where-Object {$_.InterfaceAlias -notmatch 'Loopback'}).IPAddress
     ```
 
-### Test SSH Connection
+#### Test SSH Connection
 
 ```bash
 ssh -v user@hostname
 ```
 
-The `-v` flag shows verbose output for debugging.
-
-### Check Tailscale Status
+#### Check Tailscale Status
 
 ```bash
 tailscale status
 ```
-
-Shows all devices in your Tailnet and their IPs.

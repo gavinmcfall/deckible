@@ -111,7 +111,7 @@ private/device/<platform>/<device-name>/config.yml
 
 Example:
 ```
-private/device/steamdeck/GameDeck/config.yml
+private/device/steamdeck/MySteamDeck/config.yml
 ```
 
 ### Do I need to include everything?
@@ -225,7 +225,7 @@ You could use both—run CTT once, then Bootible for ongoing config.
 private/
 ├── device/
 │   └── steamdeck/
-│       └── GameDeck/
+│       └── MySteamDeck/
 │           ├── config.yml      # Your settings
 │           ├── Images/         # Wallpapers
 │           └── Logs/           # Auto-pushed logs

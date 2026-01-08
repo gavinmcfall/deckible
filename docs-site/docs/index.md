@@ -71,18 +71,19 @@ Bootible automates the configuration of Steam Deck, ROG Ally X, and other gaming
 
 ```mermaid
 graph LR
-    A[Run Command] --> B{Dry Run?}
-    B -->|Yes| C[Preview Changes]
+    A[Run Command] --> B{First Run?}
+    B -->|Yes| C[Dry Run Preview]
     C --> D[Review Output]
-    D --> E[Run Again to Apply]
-    B -->|No| F[Apply Changes]
-    F --> G[Push Logs to Repo]
+    D --> E[Push Logs]
+    E --> F[Run bootible to Apply]
+    B -->|No| G[Apply Changes]
+    G --> H[Push Logs]
 ```
 
 1. **Dry Run by Default** — First run previews all changes without applying them
 2. **Review** — See exactly what will be installed and configured
-3. **Apply** — Run `bootible` to apply your configuration
-4. **Sync** — Logs are automatically pushed to your private repo
+3. **Logs Pushed** — Run logs are always pushed to your private repo
+4. **Apply** — Run `bootible` to apply your configuration
 
 ---
 

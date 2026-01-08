@@ -126,3 +126,16 @@
 .md-footer {
   margin-top: 2rem;
 }
+
+/* Larger header logo */
+.md-header__button.md-logo img,
+.md-header__button.md-logo svg {
+  height: 2.6rem;
+  width: auto;
+}
+
+/* Multiple header source links */
+.md-header__source {
+  display: flex;
+  gap: 0.5rem;
+}

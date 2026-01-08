@@ -126,7 +126,7 @@ push_log_to_git() {
     # The tee process is still writing to /tmp, so we need to find and copy
     # the temp log file to private device Logs before committing
     local temp_log
-    temp_log=$(ls -t /tmp/bootible_*.log 2>/dev/null | head -1)
+    temp_log=$(find /tmp -maxdepth 1 -name 'bootible_*.log' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
 
     if [[ -z "$temp_log" || ! -f "$temp_log" ]]; then
         return 0
@@ -569,6 +569,7 @@ authenticate_github() {
     # Create secure temp file
     local token_file
     token_file="/tmp/gh-token-$(head -c 8 /dev/urandom | xxd -p).tmp"
+    # shellcheck disable=SC2064  # Intentional: expand token_file now, not at signal time
     trap "rm -f '$token_file'" RETURN
 
     echo -n "$access_token" > "$token_file"
@@ -672,7 +673,6 @@ setup_private() {
         if [[ "$response" =~ ^[Yy]$ ]]; then
             echo -n "Your GitHub username: " > /dev/tty
             read -r github_user < /dev/tty
-            GITHUB_USER="$github_user"
 
             echo -n "Private repo (e.g., owner/repo): " > /dev/tty
             read -r repo_path < /dev/tty
@@ -1023,6 +1023,7 @@ run_playbook() {
     fi
 
     # Refresh sudo credentials before running ansible
+    # shellcheck disable=SC2024  # Redirect is for terminal input, not file output
     sudo -v < /dev/tty
 
     case $DEVICE in

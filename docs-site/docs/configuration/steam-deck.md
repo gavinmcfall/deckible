@@ -115,12 +115,21 @@ package_managers:
 | `install_filezilla` | bool | `false` | FTP client |
 | `install_neovim` | bool | `false` | Neovim editor |
 
-### Password Manager
+### Password Managers
 
-| Key | Type | Default | Options |
-|-----|------|---------|---------|
-| `password_manager` | string | `"none"` | `1password`, `bitwarden`, `keepassxc`, `protonpass`, `none` |
-| `password_manager_install_method` | string | `"flatpak"` | `flatpak`, `distrobox` |
+```yaml
+# Install one or more password managers
+password_managers:
+  - "1password"
+  - "bitwarden"
+```
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `password_managers` | list | `[]` | Password managers to install |
+| `password_manager_install_method` | string | `"flatpak"` | `flatpak` or `distrobox` |
+
+**Available managers:** `1password`, `bitwarden`, `keepassxc`, `protonpass`
 
 !!! tip "Distrobox for 1Password"
     Use `distrobox` method for 1Password to get full browser integration and SSH agent support.
@@ -307,7 +316,8 @@ install_discord: true
 install_spotify: true
 install_vlc: true
 install_firefox: true
-password_manager: "1password"
+password_managers:
+  - "1password"
 password_manager_install_method: "distrobox"
 
 # Remote Access

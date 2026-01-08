@@ -172,17 +172,19 @@ foreach ($app in $vpnApps) {
 # PASSWORD MANAGERS
 # =============================================================================
 
-$pwManager = Get-ConfigValue "password_manager" "none"
+$pwManagers = Get-ConfigValue "password_managers" @()
 
-switch ($pwManager) {
-    "1password" {
-        Install-WingetPackage -PackageId "AgileBits.1Password" -Name "1Password"
-    }
-    "bitwarden" {
-        Install-WingetPackage -PackageId "Bitwarden.Bitwarden" -Name "Bitwarden"
-    }
-    "keepassxc" {
-        Install-WingetPackage -PackageId "KeePassXCTeam.KeePassXC" -Name "KeePassXC"
+# Password manager package mappings
+$pwManagerPackages = @{
+    "1password" = @{ Id = "AgileBits.1Password"; Name = "1Password" }
+    "bitwarden" = @{ Id = "Bitwarden.Bitwarden"; Name = "Bitwarden" }
+    "keepassxc" = @{ Id = "KeePassXCTeam.KeePassXC"; Name = "KeePassXC" }
+}
+
+foreach ($manager in $pwManagers) {
+    if ($pwManagerPackages.ContainsKey($manager)) {
+        $pkg = $pwManagerPackages[$manager]
+        Install-WingetPackage -PackageId $pkg.Id -Name $pkg.Name
     }
 }
 

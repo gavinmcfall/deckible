@@ -96,11 +96,13 @@ function Validate-Config {
         }
     }
 
-    # Password manager validation
-    $pwManager = Get-ConfigValue -Key 'password_manager' -Default 'none'
-    $validPwManagers = @('1password', 'bitwarden', 'keepassxc', 'none')
-    if ($pwManager -notin $validPwManagers) {
-        $warnings += "Unknown password_manager '$pwManager', valid options: $($validPwManagers -join ', ')"
+    # Password managers validation
+    $pwManagers = Get-ConfigValue -Key 'password_managers' -Default @()
+    $validPwManagers = @('1password', 'bitwarden', 'keepassxc')
+    foreach ($manager in $pwManagers) {
+        if ($manager -notin $validPwManagers) {
+            $warnings += "Unknown password manager '$manager', valid options: $($validPwManagers -join ', ')"
+        }
     }
 
     return @{

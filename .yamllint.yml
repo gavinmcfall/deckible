@@ -40,3 +40,4 @@ ignore: |
   .github/
   private/
   node_modules/
+  docs-site/

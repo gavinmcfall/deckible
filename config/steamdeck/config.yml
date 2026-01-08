@@ -82,22 +82,21 @@ install_vscode: false
 # Utilities
 install_flatseal: true      # Manage Flatpak permissions - highly recommended
 
-# Password Manager
-# ----------------
-# Choose your password manager and installation method.
+# Password Managers
+# -----------------
+# Install one or more password managers.
 #
-# Options for password_manager:
+# Available options:
 #   - "1password"  : 1Password (paid)
 #   - "bitwarden"  : Bitwarden (free/paid)
 #   - "keepassxc"  : KeePassXC (free, local-only)
 #   - "protonpass" : Proton Pass (free/paid)
-#   - "none"       : Don't install a password manager
 #
 # Options for password_manager_install_method:
 #   - "flatpak"    : Easier, but limited features (no system auth, no SSH agent)
 #   - "distrobox"  : Full features via Arch container (recommended for 1Password)
 #
-password_manager: "none"
+password_managers: []
 password_manager_install_method: "flatpak"
 
 # Remote Access Apps

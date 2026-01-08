@@ -101,7 +101,8 @@ Things that are usually the same across devices:
 # Apps you want everywhere
 install_discord: true
 install_spotify: true
-password_manager: "1password"
+password_managers:
+  - "1password"
 
 # Gaming setup
 install_moonlight: true

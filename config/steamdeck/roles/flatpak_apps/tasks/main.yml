@@ -102,7 +102,7 @@
   changed_when: false
   failed_when: false
   when:
-    - password_manager | default('none') == '1password'
+    - "'1password' in (password_managers | default([]))"
     - password_manager_install_method | default('flatpak') == 'flatpak'
 
 - name: Install 1Password (Flatpak)
@@ -112,7 +112,7 @@
     method: user  # Use user install - system flatpakref fails on SteamOS
   # Flatpak limitations: no system auth, no SSH agent, browser locks separately
   when:
-    - password_manager | default('none') == '1password'
+    - "'1password' in (password_managers | default([]))"
     - password_manager_install_method | default('flatpak') == 'flatpak'
     - "'com.onepassword.OnePassword' not in (flatpak_apps.stdout | default(''))"
 
@@ -121,7 +121,7 @@
     name: com.bitwarden.desktop
     state: present
   when:
-    - password_manager | default('none') == 'bitwarden'
+    - "'bitwarden' in (password_managers | default([]))"
     - password_manager_install_method | default('flatpak') == 'flatpak'
 
 - name: Install KeePassXC (Flatpak)
@@ -129,7 +129,7 @@
     name: org.keepassxc.KeePassXC
     state: present
   when:
-    - password_manager | default('none') == 'keepassxc'
+    - "'keepassxc' in (password_managers | default([]))"
     - password_manager_install_method | default('flatpak') == 'flatpak'
 
 - name: Install Proton Pass (Flatpak)
@@ -137,7 +137,7 @@
     name: me.proton.Pass
     state: present
   when:
-    - password_manager | default('none') == 'protonpass'
+    - "'protonpass' in (password_managers | default([]))"
     - password_manager_install_method | default('flatpak') == 'flatpak'
 
 # Remote Access

@@ -25,12 +25,12 @@
 # This can be faster than typing your master password.
 
 ---
-# Only run if distrobox install method is selected
+# Only run if distrobox install method is selected and password managers are configured
 - name: Check if Distrobox installation is needed
   ansible.builtin.set_fact:
     needs_distrobox: >-
       {{ password_manager_install_method | default('flatpak') == 'distrobox'
-         and password_manager | default('none') != 'none' }}
+         and (password_managers | default([])) | length > 0 }}
 
 - name: Skip Distrobox setup
   ansible.builtin.debug:
@@ -147,14 +147,14 @@
   failed_when: false
   when:
     - needs_distrobox
-    - password_manager == '1password'
+    - "'1password' in (password_managers | default([]))"
 
 - name: Install 1Password from AUR
   ansible.builtin.command: distrobox enter arch -- yay -S --noconfirm 1password
   register: onepassword_install
   when:
     - needs_distrobox
-    - password_manager == '1password'
+    - "'1password' in (password_managers | default([]))"
     - onepassword_check.rc | default(1) != 0
   changed_when: onepassword_install.rc == 0
 
@@ -162,7 +162,7 @@
   ansible.builtin.command: distrobox enter arch -- distrobox-export --app 1password
   when:
     - needs_distrobox
-    - password_manager == '1password'
+    - "'1password' in (password_managers | default([]))"
   changed_when: false
   failed_when: false
 
@@ -176,14 +176,14 @@
   failed_when: false
   when:
     - needs_distrobox
-    - password_manager == 'bitwarden'
+    - "'bitwarden' in (password_managers | default([]))"
 
 - name: Install Bitwarden from AUR
   ansible.builtin.command: distrobox enter arch -- yay -S --noconfirm bitwarden-desktop
   register: bitwarden_install
   when:
     - needs_distrobox
-    - password_manager == 'bitwarden'
+    - "'bitwarden' in (password_managers | default([]))"
     - bitwarden_check.rc | default(1) != 0
   changed_when: bitwarden_install.rc == 0
 
@@ -191,7 +191,7 @@
   ansible.builtin.command: distrobox enter arch -- distrobox-export --app bitwarden-desktop
   when:
     - needs_distrobox
-    - password_manager == 'bitwarden'
+    - "'bitwarden' in (password_managers | default([]))"
   changed_when: false
   failed_when: false
 
@@ -205,14 +205,14 @@
   failed_when: false
   when:
     - needs_distrobox
-    - password_manager == 'keepassxc'
+    - "'keepassxc' in (password_managers | default([]))"
 
 - name: Install KeePassXC from Arch repos
   ansible.builtin.command: distrobox enter arch -- sudo pacman -S --noconfirm keepassxc
   register: keepassxc_install
   when:
     - needs_distrobox
-    - password_manager == 'keepassxc'
+    - "'keepassxc' in (password_managers | default([]))"
     - keepassxc_check.rc | default(1) != 0
   changed_when: keepassxc_install.rc == 0
 
@@ -220,7 +220,7 @@
   ansible.builtin.command: distrobox enter arch -- distrobox-export --app keepassxc
   when:
     - needs_distrobox
-    - password_manager == 'keepassxc'
+    - "'keepassxc' in (password_managers | default([]))"
   changed_when: false
   failed_when: false
 
@@ -234,14 +234,14 @@
   failed_when: false
   when:
     - needs_distrobox
-    - password_manager == 'protonpass'
+    - "'protonpass' in (password_managers | default([]))"
 
 - name: Install Proton Pass from AUR
   ansible.builtin.command: distrobox enter arch -- yay -S --noconfirm proton-pass
   register: protonpass_install
   when:
     - needs_distrobox
-    - password_manager == 'protonpass'
+    - "'protonpass' in (password_managers | default([]))"
     - protonpass_check.rc | default(1) != 0
   changed_when: protonpass_install.rc == 0
 
@@ -249,7 +249,7 @@
   ansible.builtin.command: distrobox enter arch -- distrobox-export --app proton-pass
   when:
     - needs_distrobox
-    - password_manager == 'protonpass'
+    - "'protonpass' in (password_managers | default([]))"
   changed_when: false
   failed_when: false
 
@@ -259,7 +259,7 @@
 - name: Display password manager setup info
   ansible.builtin.debug:
     msg: |
-      {{ password_manager | title }} installed via Distrobox (Arch container)!
+      Password managers installed via Distrobox (Arch container): {{ password_managers | join(', ') }}
 
       Features available (not possible with Flatpak):
       - System authentication: Use sudo password to unlock
@@ -271,6 +271,6 @@
       - Bitwarden: Settings > Security > Unlock with biometrics
       - KeePassXC: Settings > Security > Unlock with system credentials
 
-      The app appears in your normal application menu.
+      The apps appear in your normal application menu.
       First launch may take a moment as the container starts.
   when: needs_distrobox

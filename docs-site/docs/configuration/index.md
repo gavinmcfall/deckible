@@ -44,10 +44,10 @@ Your personal overrides live in your private repository:
 ```
 private/device/
 ├── steamdeck/
-│   └── GameDeck/
+│   └── MySteamDeck/
 │       └── config.yml  # Your Steam Deck config
 └── rog-ally/
-    └── Vengeance/
+    └── MyRogAlly/
         └── config.yml  # Your ROG Ally config
 ```
 
@@ -150,8 +150,9 @@ ssh_authorized_keys:
 Some options accept specific values:
 
 ```yaml
-# Must be one of: "1password", "bitwarden", "keepassxc", "protonpass", "none"
-password_manager: "1password"
+# Install one or more password managers: "1password", "bitwarden", "keepassxc", "protonpass"
+password_managers:
+  - "1password"
 
 # Must be one of: "auto", "internal", "sdcard"
 emulation_storage: "auto"
@@ -186,15 +187,17 @@ Fix the above errors in your config.yml before continuing.
 
 ---
 
-## Minimal Config Example
+## Example Configurations
+
+### Minimal Config
 
 A minimal private config might look like:
 
 ```yaml
-# private/device/steamdeck/GameDeck/config.yml
+# private/device/steamdeck/MySteamDeck/config.yml
 
 # Just the things I want different from defaults
-hostname: "gamedeck"
+hostname: "mysteamdeck"
 
 # Apps I want
 install_discord: true
@@ -211,11 +214,9 @@ decky_plugins:
 
 Everything else uses defaults.
 
----
+### Full Config
 
-## Full Config Example
-
-For a complete example, see the default configuration files:
+For complete examples with all available options, see the default configuration files:
 
 - [Steam Deck config.yml](https://github.com/gavinmcfall/bootible/blob/main/config/steamdeck/config.yml)
 - [ROG Ally config.yml](https://github.com/gavinmcfall/bootible/blob/main/config/rog-ally/config.yml)

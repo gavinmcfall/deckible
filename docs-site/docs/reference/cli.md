@@ -145,8 +145,8 @@ ansible-playbook playbook.yml --ask-become-pass
 
 # With private config
 ansible-playbook playbook.yml --ask-become-pass \
-  -e @../private/device/steamdeck/GameDeck/config.yml \
-  -e device_instance=GameDeck
+  -e @../private/device/steamdeck/MySteamDeck/config.yml \
+  -e device_instance=MySteamDeck
 
 # Check mode (dry run)
 ansible-playbook playbook.yml --check --ask-become-pass
@@ -235,26 +235,26 @@ bootible --tags gaming
 
 ---
 
-## Environment Variables
+## Reference
 
-### Steam Deck
+#### Environment Variables
 
-| Variable | Description |
-|----------|-------------|
-| `BOOTIBLE_PRIVATE_REPO` | Override private repo path |
-| `BOOTIBLE_INSTANCE` | Override device instance |
-| `GITHUB_TOKEN` | GitHub API token |
+=== "Steam Deck"
 
-### ROG Ally
+    | Variable | Description |
+    |----------|-------------|
+    | `BOOTIBLE_PRIVATE_REPO` | Override private repo path |
+    | `BOOTIBLE_INSTANCE` | Override device instance |
+    | `GITHUB_TOKEN` | GitHub API token |
 
-| Variable | Description |
-|----------|-------------|
-| `BOOTIBLE_PRIVATE_REPO` | Override private repo path |
-| `BOOTIBLE_INSTANCE` | Override device instance |
+=== "ROG Ally"
 
----
+    | Variable | Description |
+    |----------|-------------|
+    | `BOOTIBLE_PRIVATE_REPO` | Override private repo path |
+    | `BOOTIBLE_INSTANCE` | Override device instance |
 
-## Exit Codes
+#### Exit Codes
 
 | Code | Meaning |
 |------|---------|
@@ -264,29 +264,19 @@ bootible --tags gaming
 | `3` | Network error |
 | `4` | User cancelled |
 
----
+#### Logging
 
-## Logging
+=== "Steam Deck"
 
-### Steam Deck
+    ```
+    private/device/steamdeck/<instance>/Logs/
+    └── YYYY-MM-DD_HHMMSS_<hostname>_<mode>.log
+    ```
 
-Logs are saved to:
+=== "ROG Ally"
 
-```
-private/device/steamdeck/<instance>/Logs/
-├── 2025-01-08_143022_gamedeck_run.log
-├── 2025-01-07_091544_gamedeck_dryrun.log
-└── ...
-```
-
-Format: `YYYY-MM-DD_HHMMSS_<hostname>_<mode>.log`
-
-### ROG Ally
-
-PowerShell creates transcripts in:
-
-```
-private\device\rog-ally\<instance>\Logs\
-```
+    ```
+    private\device\rog-ally\<instance>\Logs\
+    ```
 
 Logs are automatically pushed to your private repo after each run.
