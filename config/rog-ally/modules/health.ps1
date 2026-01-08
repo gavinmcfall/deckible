@@ -66,7 +66,8 @@ function Invoke-HealthCheck {
         $script:HealthFailures += $Name
     }
 
-    Add-JsonLogEntry -Module (Get-CurrentModuleName) -Action "health:$Name" -Result ($(if ($success) { "success" } else { "failed" })) -DurationMs $durationMs
+    $resultValue = if ($success) { "success" } else { "failed" }
+    Add-JsonLogEntry -Module (Get-CurrentModuleName) -Action "health:$Name" -Result $resultValue -DurationMs $durationMs
 }
 
 function Test-CommandExecution {
