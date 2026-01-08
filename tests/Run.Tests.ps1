@@ -149,7 +149,10 @@ Describe "PowerShell Script Syntax" {
         foreach ($module in $modules) {
             $errors = $null
             $null = [System.Management.Automation.Language.Parser]::ParseFile($module.FullName, [ref]$null, [ref]$errors)
-            $errors.Count | Should -Be 0 -Because "Module $($module.Name) should have valid syntax"
+            if ($errors.Count -gt 0) {
+                $errorMsg = $errors | ForEach-Object { "Line $($_.Extent.StartLineNumber): $($_.Message)" }
+                $errors.Count | Should -Be 0 -Because "Module $($module.Name) has syntax errors: $($errorMsg -join '; ')"
+            }
         }
     }
 
