@@ -65,7 +65,7 @@ cp private/device/steamdeck/GameDeck/config.yml \
    private/device/steamdeck/TravelDeck/config.yml
 
 # Or download fresh template
-curl -fsSL https://raw.githubusercontent.com/gavinmcfall/bootible/main/config/steamdeck/config.yml \
+curl -fsSL https://raw.githubusercontent.com/bootible/bootible/main/config/steamdeck/config.yml \
   -o private/device/steamdeck/TravelDeck/config.yml
 ```
 

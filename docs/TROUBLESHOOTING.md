@@ -158,7 +158,7 @@ This guide covers common issues when running Bootible on ROG Ally (Windows) and 
    ```
 2. Re-run the bootstrap script:
    ```bash
-   curl -fsSL https://raw.githubusercontent.com/gavinmcfall/bootible/main/targets/deck.sh | bash
+   curl -fsSL https://raw.githubusercontent.com/bootible/bootible/main/targets/deck.sh | bash
    ```
 
 ### Ansible installation fails

@@ -422,5 +422,5 @@ sudo btrfs subvolume snapshot /home/.snapshots/bootible-pre-setup-XXXXX /home
 If these don't solve your issue:
 
 1. **Check logs** — Steam Deck: `~/bootible/private/device/steamdeck/<name>/Logs/` · ROG Ally: PowerShell transcript
-2. **Search existing issues** — [GitHub Issues](https://github.com/gavinmcfall/bootible/issues)
+2. **Search existing issues** — [GitHub Issues](https://github.com/bootible/bootible/issues)
 3. **Open new issue** with device/OS version, config snippet (remove secrets!), full error, and steps to reproduce

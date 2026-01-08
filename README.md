@@ -16,7 +16,7 @@
 | Windows Desktop | Windows 10/11 | Planned |
 | More handhelds | Various | Planned |
 
-Want support for another device? [Start a discussion](https://github.com/gavinmcfall/bootible/discussions)!
+Want support for another device? [Start a discussion](https://github.com/bootible/bootible/discussions)!
 
 ---
 
@@ -53,10 +53,10 @@ Full documentation is available at **[docs.bootible.dev](https://docs.bootible.d
 
 ## Community
 
-- [GitHub Discussions](https://github.com/gavinmcfall/bootible/discussions) - Questions, ideas, show & tell
+- [GitHub Discussions](https://github.com/bootible/bootible/discussions) - Questions, ideas, show & tell
 - [GitHub Project](https://github.com/users/gavinmcfall/projects/2) - Roadmap and progress
 - [Discord](https://discord.gg/bootible) - Chat with the community
-- [Issues](https://github.com/gavinmcfall/bootible/issues) - Bug reports and feature requests
+- [Issues](https://github.com/bootible/bootible/issues) - Bug reports and feature requests
 
 ---
 

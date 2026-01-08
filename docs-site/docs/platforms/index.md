@@ -89,7 +89,7 @@ Future platforms under consideration:
 | Legion Go | Windows 11 | Uses ROG Ally config |
 
 !!! tip "Request a Platform"
-    Want Bootible support for another device? [Open an issue](https://github.com/gavinmcfall/bootible/issues) with your platform details.
+    Want Bootible support for another device? [Open an issue](https://github.com/bootible/bootible/issues) with your platform details.
 
 ---
 

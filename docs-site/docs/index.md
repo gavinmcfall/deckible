@@ -155,7 +155,7 @@ graph LR
 
     Report issues, request features, and contribute.
 
-    [:octicons-arrow-right-24: Repository](https://github.com/gavinmcfall/bootible)
+    [:octicons-arrow-right-24: Repository](https://github.com/bootible/bootible)
 
 -   :fontawesome-brands-discord:{ .lg .middle } **Discord**
 
@@ -171,4 +171,4 @@ graph LR
 
 ## License
 
-Bootible is open source software licensed under the [MIT License](https://github.com/gavinmcfall/bootible/blob/main/LICENSE).
+Bootible is open source software licensed under the [MIT License](https://github.com/bootible/bootible/blob/main/LICENSE).

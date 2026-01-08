@@ -217,7 +217,7 @@ detect_device() {
         echo -e "${YELLOW}!${NC} Windows detected - use targets/ally.ps1 instead"
         echo ""
         echo "Run this in PowerShell:"
-        echo "  irm https://raw.githubusercontent.com/gavinmcfall/bootible/main/targets/ally.ps1 | iex"
+        echo "  irm https://raw.githubusercontent.com/bootible/bootible/main/targets/ally.ps1 | iex"
         exit 0
     fi
 
@@ -650,10 +650,10 @@ clone_bootible() {
         echo -e "${BLUE}→${NC} Cloning bootible..."
         rm -rf "$BOOTIBLE_DIR" 2>/dev/null || true
         # Simple clone - public repo, should just work
-        if ! git clone https://github.com/gavinmcfall/bootible.git "$BOOTIBLE_DIR"; then
+        if ! git clone https://github.com/bootible/bootible.git "$BOOTIBLE_DIR"; then
             # If clone fails, credentials are probably broken - clear and retry
             clear_git_credentials
-            git clone https://github.com/gavinmcfall/bootible.git "$BOOTIBLE_DIR"
+            git clone https://github.com/bootible/bootible.git "$BOOTIBLE_DIR"
         fi
         cd "$BOOTIBLE_DIR"
     fi

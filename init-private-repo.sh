@@ -21,7 +21,7 @@ NC='\033[0m'
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PRIVATE_PATH="$SCRIPT_DIR/private"
-BOOTIBLE_RAW_URL="https://raw.githubusercontent.com/gavinmcfall/bootible/main"
+BOOTIBLE_RAW_URL="https://raw.githubusercontent.com/bootible/bootible/main"
 
 echo -e "${CYAN}"
 echo "╔════════════════════════════════════════════════════════════╗"
@@ -122,7 +122,7 @@ fi
 cat > "$PRIVATE_PATH/README.md" << EOF
 # Bootible Private Configuration
 
-My private overlay for [bootible](https://github.com/gavinmcfall/bootible).
+My private overlay for [bootible](https://github.com/bootible/bootible).
 
 ## Structure
 
@@ -188,7 +188,7 @@ bootible
 
 2. Copy config from an existing device or download fresh:
    \`\`\`bash
-   curl -fsSL https://raw.githubusercontent.com/gavinmcfall/bootible/main/config/<platform>/config.yml \\
+   curl -fsSL https://raw.githubusercontent.com/bootible/bootible/main/config/<platform>/config.yml \\
      -o device/<platform>/<NewDeviceName>/config.yml
    \`\`\`
 

@@ -283,7 +283,7 @@ Run dry-run to see what would happen:
 
 ### How do I report a bug?
 
-[Open an issue](https://github.com/gavinmcfall/bootible/issues) with:
+[Open an issue](https://github.com/bootible/bootible/issues) with:
 
 1. Device and OS version
 2. Relevant config (remove secrets!)

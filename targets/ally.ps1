@@ -11,14 +11,14 @@
 
 .USAGE
     # Preview what will happen (dry run - default):
-    irm https://raw.githubusercontent.com/gavinmcfall/bootible/main/targets/ally.ps1 | iex
+    irm https://raw.githubusercontent.com/bootible/bootible/main/targets/ally.ps1 | iex
 
     # Run for real after reviewing:
     bootible
 
     # Or skip preview and run immediately:
     $env:BOOTIBLE_RUN = "1"
-    irm https://raw.githubusercontent.com/gavinmcfall/bootible/main/targets/ally.ps1 | iex
+    irm https://raw.githubusercontent.com/bootible/bootible/main/targets/ally.ps1 | iex
 #>
 
 # When running via 'irm | iex', stdin is the script content which breaks git credential manager.
@@ -28,7 +28,7 @@ if (-not $env:BOOTIBLE_DIRECT) {
     # Use bootible.dev which includes SHA256 integrity verification
     # Falls back to raw GitHub if bootible.dev is unavailable
     $primaryUrl = "https://bootible.dev/rog"
-    $fallbackUrl = "https://raw.githubusercontent.com/gavinmcfall/bootible/main/targets/ally.ps1"
+    $fallbackUrl = "https://raw.githubusercontent.com/bootible/bootible/main/targets/ally.ps1"
 
     Write-Host "Downloading bootible (with integrity verification)..." -ForegroundColor Cyan
     try {
@@ -53,7 +53,7 @@ if (-not $env:BOOTIBLE_DIRECT) {
 $ErrorActionPreference = "Stop"
 
 $BootibleDir = "$env:USERPROFILE\bootible"
-$RepoUrl = "https://github.com/gavinmcfall/bootible.git"
+$RepoUrl = "https://github.com/bootible/bootible.git"
 $PrivateRepo = $env:BOOTIBLE_PRIVATE
 $DryRun = $env:BOOTIBLE_RUN -ne "1"  # Dry run by default, set BOOTIBLE_RUN=1 to apply
 $Device = ""

@@ -218,5 +218,5 @@ Everything else uses defaults.
 
 For complete examples with all available options, see the default configuration files:
 
-- [Steam Deck config.yml](https://github.com/gavinmcfall/bootible/blob/main/config/steamdeck/config.yml)
-- [ROG Ally config.yml](https://github.com/gavinmcfall/bootible/blob/main/config/rog-ally/config.yml)
+- [Steam Deck config.yml](https://github.com/bootible/bootible/blob/main/config/steamdeck/config.yml)
+- [ROG Ally config.yml](https://github.com/bootible/bootible/blob/main/config/rog-ally/config.yml)

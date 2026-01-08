@@ -9,7 +9,7 @@
  *   /*.png      -> Static assets (served by Pages)
  */
 
-const GITHUB_RAW_BASE = 'https://raw.githubusercontent.com/gavinmcfall/bootible/main';
+const GITHUB_RAW_BASE = 'https://raw.githubusercontent.com/bootible/bootible/main';
 
 /**
  * Script routes with SHA256 checksums for integrity verification.
@@ -19,12 +19,12 @@ const ROUTES = {
   '/rog': {
     path: '/targets/ally.ps1',
     description: 'ROG Ally (Windows)',
-    sha256: '4d4fb8a32547c55ba691322d5f1017d7fec6367c255fa512961dfd9e1f501c92',
+    sha256: 'f581193ad41ace75f2558d2f56e3eefa0dab0532cf573181e23c2f5a809ed5a7',
   },
   '/deck': {
     path: '/targets/deck.sh',
     description: 'Steam Deck (SteamOS)',
-    sha256: 'cf4d1ac9c791afc9e9b5d73445b449b530163428d7e064518035c1ab3ca481d1',
+    sha256: 'c23f103215486331469565e3448281c1c0edb6e0735554a60b975951de4f1183',
   },
 };
 
@@ -111,7 +111,7 @@ Usage:
   ROG Ally X:
     irm https://bootible.dev/rog | iex
 
-More info: https://github.com/gavinmcfall/bootible
+More info: https://github.com/bootible/bootible
 `;
 }
 
@@ -407,7 +407,7 @@ function getLandingPage() {
     </section>
 
     <footer>
-      <a href="https://github.com/gavinmcfall/bootible" class="github-link">
+      <a href="https://github.com/bootible/bootible" class="github-link">
         <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
           <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
         </svg>
@@ -551,7 +551,7 @@ export default {
         `Failed to fetch script and no cached version available.\n` +
         `Error: ${fetchError}\n\n` +
         `GitHub may be temporarily unavailable. Please try again in a few minutes.\n` +
-        `If the problem persists, report at https://github.com/gavinmcfall/bootible/issues`,
+        `If the problem persists, report at https://github.com/bootible/bootible/issues`,
         {
           status: 502,
           headers: { 'Content-Type': 'text/plain' },

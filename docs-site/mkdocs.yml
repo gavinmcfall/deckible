@@ -5,8 +5,8 @@ site_name: Bootible
 site_url: https://docs.bootible.dev
 site_description: One-liner setup for gaming handhelds - Steam Deck, ROG Ally, and more
 site_author: Gavin McFall
-repo_url: https://github.com/gavinmcfall/bootible
-repo_name: gavinmcfall/bootible
+repo_url: https://github.com/bootible/bootible
+repo_name: bootible/bootible
 edit_uri: edit/main/docs-site/docs/
 
 copyright: Copyright &copy; 2024-2025 Gavin McFall · <a href="https://bootible.dev">bootible.dev</a>
@@ -84,7 +84,7 @@ extra:
       link: https://bootible.dev
       name: Bootible Home
     - icon: fontawesome/brands/github
-      link: https://github.com/gavinmcfall/bootible
+      link: https://github.com/bootible/bootible
     - icon: fontawesome/brands/discord
       link: https://discord.gg/bootible
 
