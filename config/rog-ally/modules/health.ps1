@@ -54,7 +54,7 @@ function Invoke-HealthCheck {
     $resultLabel = if ($success) { "OK" } else { "FAILED" }
     $statusType = if ($success) { "Success" } else { "Error" }
 
-    Write-Status "$Name: $resultLabel" $statusType
+    Write-Status "${Name}: $resultLabel" $statusType
 
     if (-not $success) {
         if ($detail) {
