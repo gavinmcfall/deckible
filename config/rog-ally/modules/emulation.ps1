@@ -40,7 +40,7 @@ if ($emudeckInstalled) {
 Write-Status "Setting up EmuDeck..." "Info"
 
 # Check for private EA script first
-$privateScriptPath = Join-Path $Script:BootibleRoot "private\rog-ally\scripts\EmuDeck EA Windows.bat"
+$privateScriptPath = Join-Path $Script:BootibleRoot "private\files\rog-ally\scripts\EmuDeck EA Windows.bat"
 $localScriptPath = Join-Path $Script:DeviceRoot "scripts\EmuDeck EA Windows.bat"
 
 $emudeckScript = $null
