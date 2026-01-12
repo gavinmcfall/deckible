@@ -197,7 +197,7 @@ function getLandingPage() {
     .callout-text { color: var(--text-secondary); font-size: 0.9rem; }
     .callout-link { color: var(--accent); text-decoration: none; font-weight: 500; white-space: nowrap; }
     .callout-link:hover { text-decoration: underline; }
-    .devices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 60px; }
+    .devices { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-bottom: 60px; }
     .device-card {
       background: var(--bg-card);
       border: 1px solid var(--border);
@@ -248,11 +248,14 @@ function getLandingPage() {
       background: var(--bg-dark);
       border: 1px solid var(--border);
       border-radius: 8px;
-      padding: 12px 16px;
+      padding: 10px 12px;
       font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-      font-size: 0.85rem;
+      font-size: 0.8rem;
       overflow-x: auto;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
     }
+    .command-block::-webkit-scrollbar { display: none; }
     .command-block code { color: var(--accent); white-space: nowrap; }
     .features { margin-bottom: 60px; }
     .features h2 { text-align: center; font-size: 2rem; margin-bottom: 32px; color: var(--text-primary); }
@@ -299,7 +302,6 @@ function getLandingPage() {
     }
     .github-link:hover { background: var(--bg-card-hover); border-color: var(--accent); }
     .github-link svg { width: 20px; height: 20px; fill: currentColor; }
-    @media (max-width: 900px) { .devices { grid-template-columns: repeat(2, 1fr); } }
     @media (max-width: 600px) { .devices { grid-template-columns: 1fr; } }
     @media (max-width: 600px) {
       .hero h1 { font-size: 2.5rem; }
@@ -311,7 +313,7 @@ function getLandingPage() {
 <body>
   <div class="container">
     <section class="hero">
-      <img src="/logo.png" alt="Bootible Logo" class="logo">
+      <img src="/bootible.png" alt="Bootible Logo" class="logo">
       <h1>Bootible</h1>
       <p class="tagline">One-liner setup for gaming handhelds</p>
     </section>

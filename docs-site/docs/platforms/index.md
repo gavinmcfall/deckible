@@ -39,21 +39,33 @@ Bootible supports multiple gaming platforms with platform-specific optimizations
 
     [:octicons-arrow-right-24: ROG Ally Guide](rog-ally/index.md)
 
+-   :material-android:{ .lg .middle } **Android** :material-beta:{ .beta }
+
+    ---
+
+    Android gaming handhelds via Wireless ADB.
+
+    - Retroid Pocket, AYANEO, Odin, Logitech G Cloud
+    - APK installation from URLs, F-Droid, or local files
+    - System settings configuration
+    - File push for ROMs/saves
+
+    [:octicons-arrow-right-24: Android Guide](android/index.md)
+
 </div>
 
 ---
 
 ## Platform Comparison
 
-| Feature | Steam Deck | ROG Ally |
-|---------|------------|----------|
-| **OS** | SteamOS (Arch Linux) | Windows 11 |
-| **Package Manager** | Flatpak | Winget/Chocolatey |
-| **Config Language** | YAML (Ansible) | YAML (parsed by PowerShell) |
-| **Backup Method** | Btrfs snapshots | System Restore |
-| **Gaming Plugins** | Decky Loader | - |
-| **Emulation** | EmuDeck (Linux) | EmuDeck (Windows) |
-| **Remote Play** | Moonlight, Chiaki | Moonlight, Chiaki, Parsec |
+| Feature | Steam Deck | ROG Ally | Android |
+|---------|------------|----------|---------|
+| **OS** | SteamOS (Arch Linux) | Windows 11 | Android 11+ |
+| **Package Manager** | Flatpak | Winget/Chocolatey | APK (ADB) |
+| **Config Language** | YAML (Ansible) | YAML (PowerShell) | YAML (Bash) |
+| **Provisioning** | On device | On device | From host via ADB |
+| **Emulation** | EmuDeck | EmuDeck | RetroArch, standalone |
+| **Remote Play** | Moonlight, Chiaki | Moonlight, Chiaki, Parsec | Moonlight, Chiaki, Steam Link |
 
 ---
 
@@ -67,12 +79,15 @@ curl -fsSL https://bootible.dev/deck | bash
 
 # ROG Ally - downloads ally.ps1
 irm https://bootible.dev/rog | iex
+
+# Android - downloads android.sh (run from host machine)
+curl -fsSL https://bootible.dev/android | bash
 ```
 
 The platform determines:
 
-1. **Which configuration template** to use (`config/steamdeck/` or `config/rog-ally/`)
-2. **Which installer** to run (Ansible playbook or PowerShell runner)
+1. **Which configuration template** to use (`config/steamdeck/`, `config/rog-ally/`, or `config/android/`)
+2. **Which installer** to run (Ansible playbook, PowerShell runner, or Bash/ADB)
 3. **Which package manager** installs applications
 
 ---
@@ -133,3 +148,20 @@ config/rog-ally/
     ├── debloat.ps1      # Privacy settings
     └── ...
 ```
+
+### Android (Bash + ADB) :material-beta:{ .beta }
+
+```
+targets/android.sh       # Bootstrap script (runs on host)
+config/android/
+├── Run.sh               # Provisioning engine
+├── config.yml           # Default configuration (100+ apps)
+└── lib/
+    ├── adb-helpers.sh   # ADB wrapper functions
+    ├── apk-install.sh   # APK installation
+    ├── settings.sh      # Settings configuration
+    └── files.sh         # File push logic
+```
+
+!!! note "Host-based provisioning"
+    Unlike Steam Deck and ROG Ally, Android provisioning runs **from your computer** and connects to the Android device via Wireless ADB.

@@ -72,6 +72,18 @@
   color: white;
 }
 
+.md-typeset .badge-android {
+  background: #3ddc84;
+  color: #1a1a1a;
+}
+
+/* Beta badge styling */
+.md-typeset .beta {
+  color: #f97316 !important;
+  font-size: 0.7em;
+  vertical-align: super;
+}
+
 /* Feature cards enhancement */
 .md-typeset .grid.cards > ul > li {
   border: 1px solid var(--md-default-fg-color--lightest);
