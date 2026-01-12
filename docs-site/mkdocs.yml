@@ -160,7 +160,7 @@ nav:
 
   - Platforms:
     - platforms/index.md
-    - Android (BETA):
+    - Android (ALPHA):
       - platforms/android/index.md
     - ROG Ally (Windows):
       - platforms/rog-ally/index.md

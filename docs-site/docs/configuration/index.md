@@ -91,7 +91,7 @@ install_steam: true
 
 <div class="grid cards" markdown>
 
--   :material-android:{ .lg .middle } **Android** <span class="beta-badge">BETA</span>
+-   :material-android:{ .lg .middle } **Android** <span class="beta-badge">ALPHA</span>
 
     ---
 

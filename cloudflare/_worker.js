@@ -364,7 +364,7 @@ function getLandingPage() {
         <div class="device-header">
           <img class="device-icon" src="/android.png" alt="Android">
           <div class="device-info">
-            <h3 class="device-name">Android <span class="variant">(via ADB)</span> <span class="beta-badge">BETA</span></h3>
+            <h3 class="device-name">Android <span class="variant">(via ADB)</span> <span class="beta-badge">ALPHA</span></h3>
             <p class="device-platform">Gaming Handhelds</p>
           </div>
         </div>

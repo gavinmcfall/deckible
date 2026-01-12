@@ -3,12 +3,12 @@ title: Android Configuration
 description: Complete configuration reference for Android gaming handhelds
 ---
 
-# Android Configuration Reference <span class="beta-badge">BETA</span>
+# Android Configuration Reference <span class="beta-badge">ALPHA</span>
 
 Complete reference for all Android configuration options.
 
-!!! warning "Beta Feature"
-    Android provisioning is in beta. Configuration options may change.
+!!! warning "Alpha Feature"
+    Android provisioning is in alpha. Configuration options may change.
 
 ---
 

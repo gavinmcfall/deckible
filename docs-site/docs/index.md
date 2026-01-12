@@ -65,7 +65,7 @@ Bootible automates the configuration of Steam Deck, ROG Ally, Android handhelds,
 
     **Windows 11** — PowerShell-based setup with winget packages, gaming optimizations, debloat options, and streaming tools.
 
-=== "Android (BETA)"
+=== "Android (ALPHA)"
 
     ```bash
     curl -fsSL https://bootible.dev/android | bash

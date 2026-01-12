@@ -3,10 +3,10 @@ title: Android
 description: Configure Android gaming handhelds with Bootible via Wireless ADB
 ---
 
-# Android <span class="beta-badge">BETA</span>
+# Android <span class="beta-badge">ALPHA</span>
 
-!!! warning "Beta Feature"
-    Android provisioning is currently in **beta**. Features may change and some functionality is still being tested. Please [report issues](https://github.com/bootible/bootible/issues) if you encounter problems.
+!!! warning "Alpha Feature"
+    Android provisioning is currently in **alpha**. Features may change and some functionality is still being tested. Please [report issues](https://github.com/bootible/bootible/issues) if you encounter problems.
 
 Bootible provisions Android gaming handhelds via **Wireless ADB** from a host machine (Linux, macOS, or WSL). Unlike Steam Deck and ROG Ally which run scripts on the device itself, Android provisioning runs from your computer and connects to the Android device over the network.
 
