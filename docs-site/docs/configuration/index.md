@@ -29,6 +29,8 @@ The default configuration lives in the Bootible repository:
 
 ```
 config/
+├── android/
+│   └── config.yml      # Android defaults
 ├── steamdeck/
 │   └── config.yml      # Steam Deck defaults
 └── rog-ally/
@@ -43,6 +45,9 @@ Your personal overrides live in your private repository:
 
 ```
 private/device/
+├── android/
+│   └── MyAndroid/
+│       └── config.yml  # Your Android config
 ├── steamdeck/
 │   └── MySteamDeck/
 │       └── config.yml  # Your Steam Deck config
@@ -85,6 +90,14 @@ install_steam: true
 ## Platform-Specific References
 
 <div class="grid cards" markdown>
+
+-   :material-android:{ .lg .middle } **Android** <span class="beta-badge">BETA</span>
+
+    ---
+
+    Full reference for Android configuration options.
+
+    [:octicons-arrow-right-24: Android Config](android.md)
 
 -   :fontawesome-brands-steam:{ .lg .middle } **Steam Deck**
 
@@ -218,5 +231,6 @@ Everything else uses defaults.
 
 For complete examples with all available options, see the default configuration files:
 
+- [Android config.yml](https://github.com/bootible/bootible/blob/main/config/android/config.yml)
 - [Steam Deck config.yml](https://github.com/bootible/bootible/blob/main/config/steamdeck/config.yml)
 - [ROG Ally config.yml](https://github.com/bootible/bootible/blob/main/config/rog-ally/config.yml)

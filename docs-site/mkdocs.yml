@@ -160,6 +160,8 @@ nav:
 
   - Platforms:
     - platforms/index.md
+    - Android (BETA):
+      - platforms/android/index.md
     - ROG Ally (Windows):
       - platforms/rog-ally/index.md
       - Module Reference: platforms/rog-ally/modules.md
@@ -169,6 +171,7 @@ nav:
 
   - Configuration:
     - configuration/index.md
+    - Android Options: configuration/android.md
     - Steam Deck Options: configuration/steam-deck.md
     - ROG Ally Options: configuration/rog-ally.md
 

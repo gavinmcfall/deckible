@@ -1,9 +1,9 @@
 ---
-title: Android (BETA)
+title: Android
 description: Configure Android gaming handhelds with Bootible via Wireless ADB
 ---
 
-# Android :material-beta:{ .beta }
+# Android <span class="beta-badge">BETA</span>
 
 !!! warning "Beta Feature"
     Android provisioning is currently in **beta**. Features may change and some functionality is still being tested. Please [report issues](https://github.com/bootible/bootible/issues) if you encounter problems.

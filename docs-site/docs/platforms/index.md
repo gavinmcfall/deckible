@@ -39,7 +39,7 @@ Bootible supports multiple gaming platforms with platform-specific optimizations
 
     [:octicons-arrow-right-24: ROG Ally Guide](rog-ally/index.md)
 
--   :material-android:{ .lg .middle } **Android** :material-beta:{ .beta }
+-   :material-android:{ .lg .middle } **Android** <span class="beta-badge">BETA</span>
 
     ---
 
@@ -149,7 +149,7 @@ config/rog-ally/
     └── ...
 ```
 
-### Android (Bash + ADB) :material-beta:{ .beta }
+### Android (Bash + ADB) <span class="beta-badge">BETA</span>
 
 ```
 targets/android.sh       # Bootstrap script (runs on host)

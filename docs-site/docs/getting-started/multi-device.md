@@ -5,7 +5,7 @@ description: Manage multiple devices from a single configuration repository
 
 # Multi-Device Setup
 
-Configure all your gaming devices—Steam Decks, ROG Allys, and more—from a single private repository.
+Configure all your gaming devices—Steam Decks, ROG Allys, Android handhelds, and more—from a single private repository.
 
 ---
 
@@ -16,6 +16,11 @@ Each physical device gets its own folder in your private repo:
 ```
 private/
 └── device/
+    ├── android/
+    │   ├── Retroid5/           # Retroid Pocket 5
+    │   │   └── config.yml
+    │   └── Odin2/              # Odin 2
+    │       └── config.yml
     ├── rog-ally/
     │   ├── Vengeance/          # ROG Ally X #1
     │   │   └── config.yml

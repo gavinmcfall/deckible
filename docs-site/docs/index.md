@@ -7,7 +7,7 @@ description: Bootible - One-liner setup for gaming handhelds
 
 **One-liner setup for gaming handhelds.**
 
-Bootible automates the configuration of Steam Deck, ROG Ally X, and other gaming devices with a single command. Preview everything before applying, customize via your own private config, and re-run anytime to sync your setup.
+Bootible automates the configuration of Steam Deck, ROG Ally, Android handhelds, and other gaming devices with a single command. Preview everything before applying, customize via your own private config, and re-run anytime to sync your setup.
 
 <div class="grid cards" markdown>
 
@@ -64,6 +64,14 @@ Bootible automates the configuration of Steam Deck, ROG Ally X, and other gaming
     ```
 
     **Windows 11** — PowerShell-based setup with winget packages, gaming optimizations, debloat options, and streaming tools.
+
+=== "Android (BETA)"
+
+    ```bash
+    curl -fsSL https://bootible.dev/android | bash
+    ```
+
+    **Android 11+** — Wireless ADB provisioning from your computer. Install APKs, configure settings, and push files to Retroid Pocket, AYANEO, Odin, and other Android handhelds.
 
 ---
 

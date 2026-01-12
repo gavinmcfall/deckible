@@ -78,10 +78,19 @@
 }
 
 /* Beta badge styling */
-.md-typeset .beta {
-  color: #f97316 !important;
-  font-size: 0.7em;
-  vertical-align: super;
+.md-typeset .beta-badge,
+.beta-badge {
+  display: inline-block;
+  font-size: 0.6em;
+  font-weight: 600;
+  background: linear-gradient(135deg, #f97316, #ea580c);
+  color: white !important;
+  padding: 2px 8px;
+  border-radius: 4px;
+  vertical-align: middle;
+  margin-left: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 /* Feature cards enhancement */
