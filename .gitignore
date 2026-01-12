@@ -11,6 +11,9 @@ files/rog-ally/configs/*
 # Ansible
 *.retry
 
+# Node
+node_modules/
+
 # Python
 __pycache__/
 *.py[cod]
