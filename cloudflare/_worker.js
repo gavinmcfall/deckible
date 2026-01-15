@@ -147,13 +147,13 @@ function getLandingPage() {
       --text-muted: #6e7681;
       --border: #30363d;
       --success: #3fb950;
-      --gradient-start: #1a1a2e;
-      --gradient-end: #0d1117;
+      --gradient-start: #8b5cf6;
+      --gradient-end: #1a1a2e;
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-      background: linear-gradient(135deg, var(--gradient-start) 0%, var(--gradient-end) 100%);
+      background: linear-gradient(180deg, var(--gradient-start) 0%, var(--gradient-end) 100%);
       color: var(--text-primary);
       min-height: 100vh;
       line-height: 1.6;
@@ -180,10 +180,11 @@ function getLandingPage() {
       -webkit-text-fill-color: transparent;
       background-clip: text;
     }
-    .tagline { font-size: 1.4rem; color: var(--text-secondary); margin-bottom: 40px; }
+    .tagline { font-size: 1.4rem; color: rgba(255, 255, 255, 0.85); margin-bottom: 40px; }
     .callout {
-      background: linear-gradient(135deg, rgba(88, 166, 255, 0.1) 0%, rgba(63, 185, 80, 0.1) 100%);
-      border: 1px solid var(--accent);
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
       border-radius: 12px;
       padding: 16px 24px;
       margin-bottom: 40px;
@@ -194,8 +195,8 @@ function getLandingPage() {
     .callout-icon { font-size: 1.5rem; flex-shrink: 0; }
     .callout-content { flex: 1; }
     .callout-title { font-weight: 600; margin-bottom: 4px; }
-    .callout-text { color: var(--text-secondary); font-size: 0.9rem; }
-    .callout-link { color: var(--accent); text-decoration: none; font-weight: 500; white-space: nowrap; }
+    .callout-text { color: rgba(255, 255, 255, 0.75); font-size: 0.9rem; }
+    .callout-link { color: #ffffff; text-decoration: none; font-weight: 600; white-space: nowrap; }
     .callout-link:hover { text-decoration: underline; }
     .devices { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-bottom: 60px; }
     .device-card {
@@ -313,7 +314,7 @@ function getLandingPage() {
 <body>
   <div class="container">
     <section class="hero">
-      <img src="/bootible.png" alt="Bootible Logo" class="logo">
+      <img src="/bootible-dark.png" alt="Bootible Logo" class="logo">
       <h1>Bootible</h1>
       <p class="tagline">One-liner setup for gaming handhelds</p>
     </section>

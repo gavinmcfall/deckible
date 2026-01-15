@@ -677,6 +677,112 @@ setup_private() {
     echo -e "${GREEN}+${NC} Private configuration linked"
 }
 
+# Create a new device instance in private repo
+create_device_instance() {
+    local instance_name="$1"
+    local instance_dir="$PRIVATE_DEVICE_DIR/$instance_name"
+
+    echo -e "${BLUE}>${NC} Creating new device instance: $instance_name"
+
+    # Create directory structure
+    mkdir -p "$instance_dir/Logs"
+    mkdir -p "$instance_dir/apks"
+
+    # Create starter config from template
+    cat > "$instance_dir/config.yml" << 'EOF'
+# Device Configuration
+# ====================
+# Customize this file for your Android device.
+# See config/android/config.yml for all available options.
+
+---
+# Connection (update with your device's IP)
+connection:
+  method: wireless
+  ip: ""
+  port: 5555
+
+# APK Installation
+# Enable apps by setting enabled: true
+# See config/android/apps-reference.md for app descriptions
+#
+# Sources:
+#   url    - Download from URL
+#   fdroid - Download from F-Droid
+#   local  - Use file from private repo:
+#            path: "android/apks/App.apk"  (shared, in private/android/apks/)
+#            path: "device/android/DEVICE_NAME/apks/App.apk"  (device-specific)
+install_apks: true
+apks:
+  # Recommended starter apps
+  fdroid:
+    enabled: true
+    source: url
+    url: "https://f-droid.org/F-Droid.apk"
+    package_name: "org.fdroid.fdroid"
+
+  tailscale:
+    enabled: false
+    source: url
+    url: "https://pkgs.tailscale.com/stable/tailscale-android.apk"
+    package_name: "com.tailscale.ipn"
+
+  moonlight:
+    enabled: false
+    source: url
+    url: "https://github.com/moonlight-stream/moonlight-android/releases/latest/download/Moonlight.apk"
+    package_name: "com.limelight"
+
+  # Example local APK (uncomment and adjust):
+  # my_local_app:
+  #   enabled: false
+  #   source: local
+  #   path: "android/apks/MyApp.apk"
+  #   package_name: "com.example.myapp"
+
+# Settings Configuration
+configure_settings: true
+settings:
+  global:
+    # Reduce animations for better performance
+    window_animation_scale: "0.5"
+    transition_animation_scale: "0.5"
+    animator_duration_scale: "0.5"
+
+# File Push (optional)
+# Paths are relative to private/ directory
+# Examples:
+#   local_path: "android/roms"  (shared, in private/android/roms/)
+#   local_path: "device/android/DEVICE_NAME/roms"  (device-specific)
+push_files: false
+files:
+  # roms:
+  #   enabled: false
+  #   local_path: "android/roms"
+  #   device_path: "/sdcard/RetroArch/roms"
+  custom: []
+
+# Shell Commands (optional)
+execute_commands: false
+commands:
+  pre: []
+  post: []
+
+# Device Profile (optional)
+# Options: retroid_pocket, ayaneo, odin, logitech_g_cloud, generic
+device_profile: ""
+
+# Debug options
+verbose: false
+show_commands: false
+EOF
+
+    echo -e "${GREEN}+${NC} Created: device/android/$instance_name/"
+    echo -e "  ${BLUE}>${NC} config.yml - Edit this to customize your device"
+    echo -e "  ${BLUE}>${NC} apks/      - Place local APK files here"
+    echo -e "  ${BLUE}>${NC} Logs/      - Provisioning logs saved here"
+}
+
 # Select config file (if multiple exist in private)
 select_config() {
     SELECTED_CONFIG=""
@@ -684,38 +790,58 @@ select_config() {
     PRIVATE_DEVICE_DIR="$BOOTIBLE_DIR/private/device/$DEVICE"
     DEFAULT_CONFIG="$BOOTIBLE_DIR/config/$DEVICE/config.yml"
 
-    # Check if private device config directory exists
-    if [[ ! -d "$PRIVATE_DEVICE_DIR" ]]; then
-        echo -e "${BLUE}>${NC} Using default configuration"
-        SELECTED_CONFIG="$DEFAULT_CONFIG"
-        SELECTED_INSTANCE="default"
-        return
+    # Check if private repo exists but no device directory
+    if [[ -d "$BOOTIBLE_DIR/private/.git" && ! -d "$PRIVATE_DEVICE_DIR" ]]; then
+        mkdir -p "$PRIVATE_DEVICE_DIR"
     fi
 
     # Find device instance directories (each subdirectory is a device instance)
     DEVICE_INSTANCES=()
-    while IFS= read -r -d '' dir; do
-        DEVICE_INSTANCES+=("$dir")
-    done < <(find "$PRIVATE_DEVICE_DIR" -mindepth 1 -maxdepth 1 -type d -print0 2>/dev/null | sort -z)
+    if [[ -d "$PRIVATE_DEVICE_DIR" ]]; then
+        while IFS= read -r -d '' dir; do
+            DEVICE_INSTANCES+=("$dir")
+        done < <(find "$PRIVATE_DEVICE_DIR" -mindepth 1 -maxdepth 1 -type d -print0 2>/dev/null | sort -z)
+    fi
 
-    # If no device instances, use default
+    # If no private repo, use default
+    if [[ ! -d "$BOOTIBLE_DIR/private/.git" ]]; then
+        echo -e "${BLUE}>${NC} Using default configuration (no private repo)"
+        SELECTED_CONFIG="$DEFAULT_CONFIG"
+        SELECTED_INSTANCE="default"
+        return
+    fi
+
+    # If no device instances, prompt to create one
     if [[ ${#DEVICE_INSTANCES[@]} -eq 0 ]]; then
+        echo -e "${CYAN}No Android device configurations found.${NC}"
+        echo ""
+        echo -n "Create a new device configuration? (Y/n): " > /dev/tty
+        read -r create_new < /dev/tty
+
+        if [[ ! "$create_new" =~ ^[Nn]$ ]]; then
+            echo ""
+            echo -n "Enter device name (e.g., Retroid-5, Odin-2): " > /dev/tty
+            read -r instance_name < /dev/tty
+
+            if [[ -n "$instance_name" ]]; then
+                # Sanitize name (replace spaces with dashes, remove special chars)
+                instance_name=$(echo "$instance_name" | tr ' ' '-' | tr -cd '[:alnum:]-_')
+                create_device_instance "$instance_name"
+                SELECTED_INSTANCE="$instance_name"
+                SELECTED_CONFIG="$PRIVATE_DEVICE_DIR/$instance_name/config.yml"
+                echo ""
+                return
+            fi
+        fi
+
         echo -e "${BLUE}>${NC} Using default configuration"
         SELECTED_CONFIG="$DEFAULT_CONFIG"
         SELECTED_INSTANCE="default"
         return
     fi
 
-    # If only one instance, use it automatically
-    if [[ ${#DEVICE_INSTANCES[@]} -eq 1 ]]; then
-        SELECTED_INSTANCE=$(basename "${DEVICE_INSTANCES[0]}")
-        SELECTED_CONFIG="${DEVICE_INSTANCES[0]}/config.yml"
-        echo -e "${GREEN}+${NC} Using config: $SELECTED_INSTANCE"
-        return
-    fi
-
-    # Multiple instances - let user choose
-    echo -e "${CYAN}Multiple configurations found:${NC}"
+    # Build selection menu
+    echo -e "${CYAN}Available configurations:${NC}"
     echo ""
     for i in "${!DEVICE_INSTANCES[@]}"; do
         local instance_name
@@ -723,12 +849,34 @@ select_config() {
         local num=$((i + 1))
         echo -e "  ${YELLOW}$num${NC}) $instance_name"
     done
+    local new_option=$((${#DEVICE_INSTANCES[@]} + 1))
+    echo -e "  ${YELLOW}$new_option${NC}) [Create new device]"
     echo ""
 
     while true; do
-        echo -n "Select configuration [1-${#DEVICE_INSTANCES[@]}]: "
+        echo -n "Select configuration [1-$new_option]: " > /dev/tty
         read -r selection < /dev/tty
 
+        # Create new device
+        if [[ "$selection" == "$new_option" ]]; then
+            echo ""
+            echo -n "Enter device name (e.g., Retroid-5, Odin-2): " > /dev/tty
+            read -r instance_name < /dev/tty
+
+            if [[ -n "$instance_name" ]]; then
+                instance_name=$(echo "$instance_name" | tr ' ' '-' | tr -cd '[:alnum:]-_')
+                create_device_instance "$instance_name"
+                SELECTED_INSTANCE="$instance_name"
+                SELECTED_CONFIG="$PRIVATE_DEVICE_DIR/$instance_name/config.yml"
+                echo ""
+                return
+            else
+                echo -e "${YELLOW}!${NC} Invalid name, please try again"
+                continue
+            fi
+        fi
+
+        # Select existing device
         if [[ "$selection" =~ ^[0-9]+$ ]] && [[ "$selection" -ge 1 ]] && [[ "$selection" -le ${#DEVICE_INSTANCES[@]} ]]; then
             local idx=$((selection - 1))
             SELECTED_INSTANCE=$(basename "${DEVICE_INSTANCES[$idx]}")
@@ -737,7 +885,7 @@ select_config() {
             echo -e "${GREEN}+${NC} Selected: $SELECTED_INSTANCE"
             return
         else
-            echo -e "${RED}Invalid selection. Please enter a number between 1 and ${#DEVICE_INSTANCES[@]}${NC}"
+            echo -e "${RED}Invalid selection. Please enter a number between 1 and $new_option${NC}"
         fi
     done
 }

@@ -46,3 +46,4 @@ Desktop.ini
 docs/ai-context/
 .claude/
 AGENTS.md
+.wrangler/
