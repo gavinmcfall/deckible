@@ -1172,6 +1172,7 @@ cd \"$BOOTIBLE_DIR\" && git pull && BOOTIBLE_RUN=1 ./targets/android.sh \"\$@\""
     # Add to PATH if not already there
     if [[ ":$PATH:" != *":$cmd_dir:"* ]]; then
         echo -e "${YELLOW}!${NC} Add ~/.local/bin to PATH:"
+        # shellcheck disable=SC2016  # Intentional: show literal command to user
         echo '  export PATH="$HOME/.local/bin:$PATH"'
         # Add to bashrc if not there
         # shellcheck disable=SC2016  # Intentional: check for literal string
