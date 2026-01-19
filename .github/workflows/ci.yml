@@ -122,9 +122,9 @@ jobs:
           ANDROID_HASH=$(sha256sum targets/android.sh | cut -d' ' -f1)
 
           # Extract checksums by looking for path context (more reliable than position)
-          ALLY_EXPECTED=$(grep -A2 "'/rog'" cloudflare/_worker.js | grep -oP "sha256: '\K[a-f0-9]{64}")
-          DECK_EXPECTED=$(grep -A2 "'/deck'" cloudflare/_worker.js | grep -oP "sha256: '\K[a-f0-9]{64}")
-          ANDROID_EXPECTED=$(grep -A2 "'/android'" cloudflare/_worker.js | grep -oP "sha256: '\K[a-f0-9]{64}")
+          ALLY_EXPECTED=$(grep -A3 "'/rog':" cloudflare/_worker.js | grep sha256 | sed "s/.*sha256: '\\([a-f0-9]*\\)'.*/\\1/")
+          DECK_EXPECTED=$(grep -A3 "'/deck':" cloudflare/_worker.js | grep sha256 | sed "s/.*sha256: '\\([a-f0-9]*\\)'.*/\\1/")
+          ANDROID_EXPECTED=$(grep -A3 "'/android':" cloudflare/_worker.js | grep sha256 | sed "s/.*sha256: '\\([a-f0-9]*\\)'.*/\\1/")
 
           FAILED=0
 
