@@ -29,7 +29,7 @@ const ROUTES = {
   '/android': {
     path: '/targets/android.sh',
     description: 'Android (Wireless ADB)',
-    sha256: '6dc598eac5795f19c785b8a0494faa4c0e87e09afb5555c6661cad001bffdfc3',
+    sha256: 'ea45a4b1c64edfdc6af3ce9a06ac7c345287fa680fe680e4ee17b533d2f9f6c4',
   },
 };
 

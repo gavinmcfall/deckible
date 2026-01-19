@@ -119,11 +119,12 @@ jobs:
         run: |
           ALLY_HASH=$(sha256sum targets/ally.ps1 | cut -d' ' -f1)
           DECK_HASH=$(sha256sum targets/deck.sh | cut -d' ' -f1)
+          ANDROID_HASH=$(sha256sum targets/android.sh | cut -d' ' -f1)
 
-          # Extract checksums from the ROUTES object (format: sha256: 'hash')
-          # ally.ps1 is the first sha256, deck.sh is the second
-          ALLY_EXPECTED=$(grep -oP "sha256: '\K[a-f0-9]{64}" cloudflare/_worker.js | head -1)
-          DECK_EXPECTED=$(grep -oP "sha256: '\K[a-f0-9]{64}" cloudflare/_worker.js | tail -1)
+          # Extract checksums by looking for path context (more reliable than position)
+          ALLY_EXPECTED=$(grep -A2 "'/rog'" cloudflare/_worker.js | grep -oP "sha256: '\K[a-f0-9]{64}")
+          DECK_EXPECTED=$(grep -A2 "'/deck'" cloudflare/_worker.js | grep -oP "sha256: '\K[a-f0-9]{64}")
+          ANDROID_EXPECTED=$(grep -A2 "'/android'" cloudflare/_worker.js | grep -oP "sha256: '\K[a-f0-9]{64}")
 
           FAILED=0
 
@@ -139,6 +140,14 @@ jobs:
             echo "::error::deck.sh checksum mismatch!"
             echo "  Expected: $DECK_EXPECTED"
             echo "  Got:      $DECK_HASH"
+            echo "  Run: ./scripts/update-checksums.sh"
+            FAILED=1
+          fi
+
+          if [ "$ANDROID_HASH" != "$ANDROID_EXPECTED" ]; then
+            echo "::error::android.sh checksum mismatch!"
+            echo "  Expected: $ANDROID_EXPECTED"
+            echo "  Got:      $ANDROID_HASH"
             echo "  Run: ./scripts/update-checksums.sh"
             FAILED=1
           fi
